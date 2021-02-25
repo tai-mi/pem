@@ -6,8 +6,8 @@ library(tidyverse)
 
 # stuff -------------------------------------------------------------------
 
-coarse <- readRDS('sc_data/singler_coarse.rds')
-fine <- readRDS('sc_data/singler_fine.rds')
+coarse <- readRDS('data_sc/singler_coarse.rds')
+fine <- readRDS('data_sc/singler_fine.rds')
 
 coarse$main <- coarse$labels %>% str_extract('.*(?= \\()')
 coarse$fine <- coarse$labels %>% str_extract('(?<=\\().*(?=\\))')

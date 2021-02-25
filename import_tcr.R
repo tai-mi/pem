@@ -17,7 +17,7 @@ filetype <- 'filtered_contig_annotations.csv'
 
 for (link in links) {
   data <- data.table::fread(paste0(url1,link,filetype))
-  write.csv(data, file=paste0('tcr_data/',
+  write.csv(data, file=paste0('data_tcr/',
     str_extract(link,'.*(?=-6_VHT_cellranger)'), '.csv'))
 }
 
@@ -32,7 +32,7 @@ links <- links[str_detect(links,'.*ranger/$')]
 
 for (link in links) {
   data <- data.table::fread(paste0(url1,link,filetype))
-  write.csv(data, file=paste0('tcr_data/',
+  write.csv(data, file=paste0('data_tcr/',
                               str_extract(link,'.*(?=-6VDJ)'), '.csv'))
 }
 

@@ -6,8 +6,8 @@ library(tidyverse)
 
 # stuff -------------------------------------------------------------------
 
-meta <- readRDS('sc_data/metadata.rds')
-mark <- readRDS('sc_data/all_markers.rds')
+meta <- readRDS('data_sc/metadata.rds')
+mark <- readRDS('data_sc/all_markers.rds')
 
 mark$positivity <- ifelse(mark$avg_logFC>0,T,F)
 
@@ -45,3 +45,26 @@ ff <- function(genes,df=mark){
   h16 <- mark %>% filter(cluster==16)
   g16 <- c('CD1C','CD83','CD209','THBD','CD8a','ly75','itgae','itgam','itgax')
 }
+
+
+# Bcells ------------------------------------------------------------------
+
+bcomp <- function(genes){
+  genes <- limma::alias2Symbol(genes)
+  eight <- mark %>% filter(cluster==8)
+  rownames(eight) %<>% str_extract('^[^\\.]+')
+  twosix <- mark %>% filter(cluster==26)
+  rownames(twosix) %<>% str_extract('^[^\\.]+')
+  for(g in genes){
+    g <- toupper(g)
+    q <- ifelse(g %in% rownames(eight),
+           eight1 <- eight[g,2],
+           eight1 <- NA)
+    q <- ifelse(g %in% rownames(twosix),
+           twosix1 <- twosix[g,2],
+           twosix1 <- NA)
+    cat('8:',eight1,'\n','26:',twosix1,'\n')
+  }
+}
+# fuck it
+

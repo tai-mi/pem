@@ -4,5 +4,7 @@
 .Ruserdata
 /figures
 /immunoseq_tils
-/sc_data
-/tcr_data
+/data_sc
+/data_tcr
+/data_export
+/data_markers

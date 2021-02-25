@@ -6,12 +6,12 @@ library(CellaRepertorium)
 
 # Load ---------------------------------------------------------------
 
-fList <- list.files('tcr_data')
+fList <- list.files('data_tcr')
 tempData <- data.frame()
 
 for (file in fList) {
   tempData <- rbind(tempData,
-                    data.table::fread(paste0('tcr_data/',file))[,-1])
+                    data.table::fread(paste0('data_tcr/',file))[,-1])
 }
 
 
