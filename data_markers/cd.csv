@@ -1,0 +1,250 @@
+﻿gene,cell
+CD1A,"thymo, macrolang, DC"
+CD1B,"thymo, macrolang, DC"
+CD1C,"thymo, macrolang, DC, Bsub"
+CD1D,"epith, Bsub, mono, DC"
+CD1E,DC
+CD2,"thymo, T, NK"
+CD2R,Tact
+CD3GD,"T, thymo"
+CD3E,"T, thymo"
+CD4,"thymo, Tsub, mono, mac"
+CD5,"thymo, T, Bsub"
+CD6,"thymo, T, Bsub"
+CD7,"thymo, T, NK"
+CD8A,"thymo, Tsub, NK"
+CD8B,"thymo, Tsub"
+CD9,"Bpre, eosinophils, basophils, platelets, Tact"
+CD10,"Bpre, Tpre, neutrophil"
+CD11A,"lymph, gran, mono, mac"
+CD11B,"myeloid, NK"
+CD11C,"DC, myeloid, NK, B, Tsub"
+CDW12,"mono, gran, platelets"
+CD13,myeloid
+CD14,"mono, mac, macrolang, gran"
+CD15,"neutrophil, eosinophils, mono"
+CD15S,"neutrophil, eosinophils, mono, memory helper T,, B, NK, HEV"
+CD15U,myeloid subset
+CD16A,"neutrophil, mac, NK"
+CD16B,neutrophil
+CDW17,"neutrophil, mono, platelets"
+CD18,leuko
+CD19,"B, DCfol"
+CD20,"B, Tsub"
+CD21,"B, DCfol, Tsub"
+CD22,B
+CD23,"B, macact, eosinophils, DCfol, platelets"
+CD24,"thymo, erythrocytes, myeloid"
+CD25,"Tact, Bact"
+CD26,"thymo, Tact"
+CD27,"thymo, T, Bsub, NKsub"
+CD28,"Tsub, thymo, Bplasma"
+CD29,"lymph, mono, platelets, mast, fibroblast, endoth"
+CD30,"Bact, T, NK"
+CD31,"mono, platelets, gran, endoth, lymphsub"
+CD32,"mono, gran, B, platelets"
+CD33,"myeloid, mono, gran, DC, mast, Tact"
+CD35,"erythrocytes, B, mono, neutrophil, eosinophils, DCfol, Tsub"
+CD36,"platelets, mono, mac, endoth, erythrocytes"
+CD38,"Bplasma, B, Tact"
+CD39,B
+CD40,"B, mono, mac, DCfol, endoth, Tsub"
+CD41,"platelets, megakaryocytes"
+CD42A,"platelets, megakaryocytes"
+CD42B,"platelets, megakaryocytes"
+CD42C,"platelets, megakaryocytes"
+CD42D,"platelets, megakaryocytes"
+CD48,leuko
+CD49A,"Tact, mono"
+CD49B,"B, mono, platelets, Tact, megakaryocytes"
+CD49D,"T, B, NK, thymo, mono, eosinophils, mast, DC"
+CD49E,"thymo, T, mono, platelets, Bpre, Bact"
+CD49F,"Tmem, thymo, mono, platelets, megakaryocytes, epith"
+CD52,"thymo, T, B, mono, mac"
+CD53,"leuko, DC"
+CD56,"NK, Tsub"
+CD57,"NKsub, Tsub"
+CD60A,"Tsub, platelets, epith"
+CD60B,"Tsub, Bact"
+CD60C,Tsub
+CD61,"platelets, megakaryocytes, mac, endoth"
+CD62E,endoth
+CD62L,"Bnai, Tmem, mono, gran, NK, thymo"
+CD62P,"platelets, endoth"
+CD63,"platelets, mono, mac"
+CD64,"mono, mac, DC"
+CD65,"gran, monosub"
+CD65S,"gran, mono"
+CD66A,"neutrophil, epith"
+CD66B,gran
+CD66C,neutrophil
+CD66D,neutrophil
+CD69,"Tact, B, NK, gran, thymo, platelets, macrolang"
+CD70,"Bact, Tact"
+CD72,"B, DCfol"
+CD73,"Bsub, Tsub, DCfol, epith"
+CD74,"B, mac, mono, macrolang, DC, Tact"
+CD75,"Bsub, epith"
+CD75S,"Bsub, Tsub"
+CD79A,B
+CD79B,B
+CD80,"Bact, Tact, mac, DC"
+CD81,"T, B, NK, thymo, DC, endoth, fibroblast"
+CD82,leuko
+CD83,"Bact, Tact, DC, macrolang"
+CDW84,"mono, platelets, B, Tsub, macsub"
+CD85,"DC, mono, B, NK, Tsub"
+CD86,"mono, DC, Bact, Tact"
+CD87,"gran, mono, NK, Tact, endoth"
+CD88,"gran, mono, DC"
+CD89,"mono, mac, gran, neutrophil, Bsub, Tsub"
+CD91,"mono, mac, fibroblast"
+CDW92,"neutrophil, mono, platelets, endoth"
+CD93,"neutrophil, mono, endoth"
+CD94,"NK, Tsub"
+CD95,"lymph, mono, neutrophil"
+CD96,"NK, Tact"
+CD97,"Bact, Tact, mono, gran"
+CD99,leuko
+CD99R,"T, NK, myeloid"
+CD101,"mono, gran,DC, Tact"
+CD102,"lymph, mono, platelets, endoth"
+CD107A,"platelets, T, endoth"
+CD107B,"platelets, T, endoth"
+CD111,"mac, neutrophil"
+CD112,"mono, neutrophil, megakaryocytes, endoth, epith"
+CD114,"myeloid, endoth"
+CD115,"mono, mac, monopre"
+CD116,"mono, gran, DC, endoth"
+CD117,mast
+CD118,epith
+CDW119,"mac, mono, B, T, NK, neutrophil, endoth"
+CDW121B,"B, mac, mono, Tsub"
+CD122,"NK, T, B, mono"
+CDW123,"lymphsub, basophils, mac, DC, megakaryocytes"
+CD124,"lymph, mono, epith"
+CDW125,"eosinophils, basophils"
+CD126,"B, Bplasma"
+CD127,"T, Bpro"
+CD130,"Bact, Bplasma, endoth"
+CDW131,"mono, gran, Bpre"
+CD132,"T, B, NK, mono, gran"
+CD134,Tact
+CDW137,Tact
+CD138,"Bplasma, Bpre"
+CD139,"B, mono, gran"
+CD141,"mono, neutrophil, endoth"
+CD142,"mono, endoth, keratinocytes, epith"
+CD143,"endoth, epith, fibroblast, macact"
+CD147,"leuko, erythrocytes, platelets, endoth"
+CD148,"gran, mono, DC, T"
+CD150,"Tsub, B, DC, endoth"
+CD151,"endoth, megakaryocytes, platelets, epith"
+CD152,"Tact, B"
+CD153,"neutrophil, B, Tact, mac"
+CD154,Tact
+CD155,"mono, mac"
+CD156A,"neutrophil, mono"
+CD157,"gran, mono, Bpre, endoth"
+CD158A,"NKsub, Tsub"
+CD158B,"NKsub, Tsub"
+CD159A,"Tsub, NK"
+CD159C,NK
+CD160,"NKsub, Tsub"
+CD161,"Tsub, NK"
+CD162R,NKsub
+CD163,"mono, mac"
+CD166,"mono, epith, fibroblast, Tact"
+CD168,"mono, Tsub, thymo"
+CD169,macsub
+CD170,"macsub, neutrophil"
+CD172A,"mono, Tsub"
+CD172B,"mono, DC"
+CD177,neutrophilub
+CD178,Tact
+CD179A,Bpre
+CD179B,Bpre
+CD180,"Bsub, mono, DC"
+CD181,"neutrophil, basophils, NK, Tsub, mono"
+CD182,"neutrophil, basophils, NK, Tsub, mono"
+CD183,"eosinophils, Tact, NK"
+CD184,"B, DC, Tsub, mono, endoth"
+CD185,Bmat
+CDW186,Tact
+CD191,"T, mono"
+CD192,"NKact, Tsub, B, endoth"
+CD193,"eosinophils, mono, Tsub"
+CD195,"mono, Tsub"
+CD196,"Tsub, B, DCsub"
+CD197,"Tsub, DCsub"
+CDW198,"T, Th2, NK, mono"
+CDW199,Tmem
+CD200,"thymo, endoth, B, Tact"
+CD203C,"basophils, mast, megakaryocytes"
+CD204,mac
+CD205,DC
+CD206,"DCsub, mac, mono"
+CD207,macrolang
+CD208,"DCact, DCsub"
+CD209,DCsub
+CDW210,"T, B, NK, mono, mac"
+CD212,"Tact, NK"
+CD213A1,"B, mono, fibroblast, endoth"
+CD213A2,"B, mono"
+CDW218A,"T, NK, DCs"
+CDW218B,"T, NK, DCs"
+CD223,"Tact, NK"
+CD226,"T, NK, mono, platelets"
+CD227,"epith, DCfol, mono, Bsub"
+CD229,"T, B"
+CD233,erythrocytes
+CD234,erythrocytes
+CD235A,erythrocytes
+CD235AB,erythrocytes
+CD235B,erythrocytes
+CD236,erythrocytes
+CD236R,erythrocytes
+CD238,erythrocytes
+CD239,erythrocytes
+CD240CE,erythrocytes
+CD240D,erythrocytes
+CD241,erythrocytes
+CD242,erythrocytes
+CD244,"Tsub, mono, basophils, NK"
+CD245,Tsub
+CD247,"T, NK"
+CD252,Bact
+CD256,"mono, mac"
+CD257,monoact
+CD258,"Tact, DCpre"
+CD267,"B, Tact"
+CD268,B
+CD269,Bmat
+CD272,"Tact, B, Th1"
+CD273,"DCsub, mono, mac"
+CD275,"B, DC, mono"
+CD277,"T, B, NK, mono, DC, endoth"
+CD278,"Tact, Th2"
+CD279,"Tact, Bact"
+CD282,"mono, neutrophil, mac"
+CD283,DCmo
+CD289,DCp
+CD294,"Th2, eosinophils, basophils"
+CD297,monoact
+CD300C,"mono, neutrophil, Bsub, Tsub"
+CD301,DCpre
+CD303,DCp
+CD304,"Treg, DC"
+CD305,"NK, B, T, mono"
+CD307,Bsub
+CD312,"mono, mac, DCmo"
+CD314,"NK, TC, Tnk"
+CD315,"Bsub, monoact"
+CD316,"B, T"
+CD317,"B, T, NK, mono, DC"
+CD319,"T, B, DCsub, NK"
+CD320,DCfol
+CDW329,"neutrophil, mono"
+CD335,NK
+CD336,NK
+CD337,NK

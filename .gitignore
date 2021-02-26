@@ -2,9 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
-/figures
-/immunoseq_tils
-/data_sc
-/data_tcr
-/data_export
-/data_markers
+immunoseq_tils/
+data_sc/**
+!data_sc/all_markers.rds
+!data_sc/mark/**
+data_tcr/
+data_export/
+data_markers/**
+!data_markers/cd.csv
