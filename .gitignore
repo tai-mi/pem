@@ -5,6 +5,7 @@
 immunoseq_tils/
 data_sc/*.rds
 !data_sc/all_markers.rds
+!data_sc/metadata.rds
 data_tcr/
 data_export/
 data_markers/**
