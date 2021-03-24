@@ -35,20 +35,20 @@ TGD = 'TRGC1,TRGC2,TRDC',
 #MACRO
 MACROPHAGE = 'CD14,FCGR3A,FCGR1A,CD68,TFRC,CCR5',
 # MORE AT "https://www.bio-rad-antibodies.com/macrophage-m1-m2-tam-tcr-FCGR3A9-cd-markers-antibodies.html"
-NEUTROPHIL = 'FUT4,FCGR3A,FCGR3A,CEACAM8,CEACAM8,ITGAM,CD33,MPO',
+NEUTROPHIL = c('FUT4','FCGR3A','FCGR3A','CEACAM8','CEACAM8','ITGAM','CD33','MPO'),
 BASOPHIL = 'CCR3,ITGAX,CD22,CD22,CD69,PTGDR2,ENPP3,FCER1A,IL3RA,ITGA2',
 EOSINOPHIL = 'CCR3,ITGAM,FUT4,PTPRC,CEACAM8,ADGRE1,IL5RA,IL5RA,ITGA4,ITGA4,SIGLEC8',
 # MONO
-MONOCLASS = 'CD14,CCR2,CCR5,SELL',
-MONONCLASS = 'CD14,FCGR3A,CX3CR1',
-MONOINT = 'CD14,FCGR3A,CD68,ITGAX',
+MONOCLASS = c('CD14','CCR2','CCR5','SELL'),
+MONONCLASS = c('CD14','FCGR3A','CX3CR1'),
+MONOINT = c('CD14','FCGR3A','CD68','ITGAX'),
 NK = 'NCAM1',
 GRANULOCYTE = 'CEACAM8',
 MAST = 'PTPRC,KIT,ENPP3,FCGR2A,FCGR2B,FCER1A,MITF',
 
 #DC
-DCC = 'CD1C,CD8B,CD8A,ITGAM,ITGAX,ITGAE,LY75',
-DCP ='CLEC4C,NRP1,IL3RA,LILRA4,TLR7,TLR9',
+DCC = c('CD1C','CD8B','CD8A','ITGAM','ITGAX','ITGAE','LY75'),
+DCP = c('CLEC4C','NRP1','IL3RA','LILRA4','TLR7','TLR9'),
 
 #B CELL
 B = 'CD19,CD24,CD40,CD72',
@@ -56,7 +56,7 @@ B1 = 'MS4A1,CD27,SPN',
 BNAIVE = 'CD22',
 BPLASMA = 'CD27,CD38,PRDM1,XBP1,IRF4,SDC1,BCL2,BCL6,SDC1',
 BMEM = 'CD27,BCL2,NT5E',
-BREG = 'IL10,CD1D,CD24,CD5,CD44,CD38,TFRC,HAVCR1')
+BREG = c('IL10','CD1D','CD24','CD5','CD44','CD38','TFRC','HAVCR1'))
 
 for(i in h1){
   stringr::str_split(i,',')
@@ -138,3 +138,22 @@ for(i in names(searchF2)){
   print(i)
   print(searchF2[[i]][[1]][!(searchF2[[i]][[1]] %in% feats)])
 }
+
+
+# rerun/panglao --------------------------------------------------------------
+
+require(magrittr)
+require(tidyverse)
+# require(Seurat)
+
+db <- data.table::fread('data_markers/PanglaoDB_markers_27_Mar_2020.tsv',
+                        colClasses=c(organ='factor','cell type'='factor'))
+
+db %<>% filter(species %in% c('Hs','Mm Hs')) %>% 
+  select(symbol='official gene symbol',
+         type='cell type',
+         ubiq='ubiquitousness index',
+         description='product description',
+         organ, 
+         sensitivity=sensitivity_human,
+         specificity=specificity_human)
