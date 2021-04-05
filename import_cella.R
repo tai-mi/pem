@@ -31,7 +31,7 @@ dat %<>% mutate_cdb(productive=case_when(
   toupper(as.character(productive))=='NONE'~NA,
 ))
 
-cl <- readRDS('clinical.rds')
+cl <- readRDS('data_misc/clinical.rds')
 clResponse <- set_names(cl$response,cl$sample)
 clLynch <- set_names(cl$lynch,cl$sample)
 
@@ -87,6 +87,8 @@ tab_umi <- crosstab_by_celltype(dat) %>%
   full_join(dat@contig_tbl,by=c('barcode','patient','timepoint')) %>% 
   filter(!is.na(is_cell))
 # adds in number of t_ab sequences for each cell barcode
+
+saveRDS(dat,'data_misc/dat.rds')
 
 # diversity -----------------------------------------------------------------
 
@@ -165,3 +167,50 @@ for (i in clResponse[clResponse %in% c('SD','PD')] %>% names() %>% .[1:9]) {
   webshot::webshot('temp.html',paste0('figures/nonresp/','c',i,'.png'))
 }
 
+
+# til connection ----------------------------------------------------------
+
+rep1 <- readRDS('data_misc/rep1.rds')
+dat <- readRDS('data_misc/dat.rds')
+
+# takes df (already filtered to one set to analyze)
+toImmunarch <- function(df){
+  nTot <- nrow(df)
+  df <- add_count(df,cdr3)
+  df[!duplicated(df$cdr3),] %>% select(
+    Clones=n,
+    CDR3.nt=cdr3_nt,
+    CDR3.aa=cdr3,
+    V.name=v_gene,
+    D.name=d_gene,
+    J.name=j_gene,
+    patient,
+    timepoint
+  ) %>% mutate(
+    V.end=NA,
+    D.start=NA,
+    D.end=NA,
+    J.start=NA,
+    VJ.ins=NA,
+    VD.ins=NA,
+    DJ.ins=NA,
+    Sequence=NA,.after=6) %>% 
+  mutate(Proportion=Clones/nTot,.after=1) %>% 
+    arrange(desc(Clones))
+}
+
+trackCl2 <- function(p,...){
+  require(immunarch)
+  if(!exists('rep1')) break
+  p <- as.character(p)
+  temp <- filter(dat@contig_tbl,patient==p) %>%
+    group_split(timepoint) %>%
+    map(~toImmunarch(.x))
+  temp %<>% set_names(filter(dat@contig_tbl,patient==p) %>%
+                        group_by(timepoint) %>% group_keys() %>% unlist())
+  if(p %in% names(rep1$data)) temp$til <- rep1$data[[p]]
+  trackClonotypes(temp,...)
+}
+
+# quantify proportion/prop of top clones from til that present in pbmc
+# correlations between them?
