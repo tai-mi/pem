@@ -72,7 +72,7 @@ rep2$data %<>% map(function(x){
 })
 
 saveRDS(rep2,'data_misc/rep2.rds')
-                   
+
 # expcon -----------------------------------------------------------------
 
 rep2 <- readRDS('data_misc/rep2.rds')
