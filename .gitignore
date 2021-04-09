@@ -2,11 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
-data_tils/
-data_sc/old
-data_tcr/
-data_export/
+data_tils/**
+data_sc/old/**
+data_tcr/**
+data_export/**
 data_markers/**
 !data_markers/cd.csv
-figures/prelim_figs
-figures/old
+figures/old/**
