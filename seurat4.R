@@ -163,3 +163,21 @@ saveRDS(ldat,'ldat3.rds')
 ldat <- FindClusters(ldat,resolution=0.9)
 ldat <- RunUMAP(ldat,dims=1:20)
 saveRDS(ldat,'ldat4.rds')
+
+
+# T cells -----------------------------------------------------------------
+
+library(Seurat)
+library(future)
+options(future.globals.maxSize= 5*1024^4, future.rng.onMisuse="ignore")
+setwd('~/scratch60/pem/')
+
+ldat <- readRDS('ldat4.rds')
+ldat <- subset(ldat,subset=(seurat_clusters %in% c(1,3:7,9,10,12:14,16,17,24,33)))
+
+ldat <- RunPCA(ldat)
+ldat <- FindNeighbors(ldat,dims=1:30)
+ldat <- FindClusters(ldat,resolution=1.2)
+saveRDS(ldat,'tcdat.rds')
+# ldat <- RunUMAP(ldat,dims=1:20)
+# saveRDS(ldat,'ldat4.rds')
