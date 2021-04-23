@@ -19,7 +19,7 @@ typeCoarse <- c('mono','t','nk','t','t','t','t','t','b','t','t','mono','t',
                 'erythroid')
 
 
-# attempt1 ----------------------------------------------------------------
+# fail1 ----------------------------------------------------------------
 
 cellNum <- tibble(type=typeFine,type2=typeCoarse,count=stuff)
 cellNum %>% group_by(type) %>% summarise(n=sum(count))
