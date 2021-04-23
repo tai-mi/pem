@@ -50,6 +50,9 @@ trackCl2 <- function(p,...){
   trackClonotypes(temp,...)
 }
 
+
+# integrate to immunarch --------------------------------------------------
+
 # make an immunarch of everything
 dat2 <- dat@contig_tbl %>% group_split(patient,timepoint) %>% 
   map(~toImmunarch(.x))
@@ -92,3 +95,28 @@ propComp <- function(p,x,y){
 #' quantify proportion/prop of top clones from til that present in pbmc
 #' correlations between them?
 #' scatterplot of pbmc1 vs til
+
+
+# expansion annotations ---------------------------------------------------
+
+# Setup: run libraries, root, load rep2
+
+# filter out patients without til data
+withTils <- rep2$meta %>% filter(timepoint=='til') %>% .$patient
+rep2$data <- rep2$data[rep2$meta$patient %in% withTils]
+rep2$meta %<>% filter(patient %in% withTils)
+
+# annotate
+
+
+trackCl2 <- function(p,...){
+  require(immunarch)
+  p <- as.character(p)
+  temp <- filter(dat@contig_tbl,patient==p) %>%
+    group_split(timepoint) %>%
+    map(~toImmunarch(.x))
+  temp %<>% set_names(filter(dat@contig_tbl,patient==p) %>%
+                        group_by(timepoint) %>% group_keys() %>% unlist())
+  if(p %in% names(rep1$data)) temp$til <- rep1$data[[p]]
+  trackClonotypes(temp,...)
+}
