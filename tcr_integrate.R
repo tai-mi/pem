@@ -80,6 +80,7 @@ saveRDS(rep2,'data_misc/rep2.rds')
 
 rep2 <- readRDS('data_misc/rep2.rds')
 
+# scatterplot of proportion of each clone in one timepoint vs other
 propComp <- function(p,x,y){
   # will error if patient is missing required data
   joined <- full_join(rep2$data[[paste0(p,'-',x)]],
@@ -94,29 +95,56 @@ propComp <- function(p,x,y){
 
 #' quantify proportion/prop of top clones from til that present in pbmc
 #' correlations between them?
-#' scatterplot of pbmc1 vs til
 
 
 # expansion annotations ---------------------------------------------------
 
 # Setup: run libraries, root, load rep2
+rep2 <- readRDS('data_misc/rep2.rds')
 
 # filter out patients without til data
 withTils <- rep2$meta %>% filter(timepoint=='til') %>% .$patient
 rep2$data <- rep2$data[rep2$meta$patient %in% withTils]
 rep2$meta %<>% filter(patient %in% withTils)
 
+map_dbl(rep2$data,nrow) %>% sort() 
+#20-5 only has 2 doublets, 7-til has 1 8, 8-til has 2 8s, 7 8s, 3 8s
+# might remove 20-5 from this analysis
+# rep2$data <- rep2$data[names(rep2$data)!='20-5']
+# rep2$meta %<>% filter(!((patient==20)&(timepoint==5)))
+
 # annotate
+dat@cell_tbl$expTil <- 0
 
+for(p in withTils){
+  for(i in c(1,2,8)){
+    seqs <- rep2$data[[paste0(p,'-til')]] %>% 
+      filter(Clones>=i) %>% .$CDR3.aa
+    for(tp in rep2$meta %>% filter(patient==p,timepoint!='til') %>% .$timepoint){
+      bars <- dat@contig_tbl %>% 
+        filter(cdr3 %in% seqs,timepoint==tp,patient==p) %>% 
+        .$barcode %>% unique()
+      dat@cell_tbl$expTil[((dat@cell_tbl$barcode %in% bars)&
+                             (dat@cell_tbl$patient==p)&
+                             (dat@cell_tbl$timepoint==tp))] <- i
+    }}}
+# unnecessarilty assigns 1 level to 2's and 8's too
+# could probably map2 somewhere
+# saveRDS(dat,'data_misc/dat.rds')
 
-trackCl2 <- function(p,...){
-  require(immunarch)
-  p <- as.character(p)
-  temp <- filter(dat@contig_tbl,patient==p) %>%
-    group_split(timepoint) %>%
-    map(~toImmunarch(.x))
-  temp %<>% set_names(filter(dat@contig_tbl,patient==p) %>%
-                        group_by(timepoint) %>% group_keys() %>% unlist())
-  if(p %in% names(rep1$data)) temp$til <- rep1$data[[p]]
-  trackClonotypes(temp,...)
-}
+# quant per til
+map_dfr(withTils,function(p){
+  temp1 <- map_dbl(c(1,2,8),function(i){
+    rep2$data[[paste0(p,'-til')]] %>% 
+      filter(Clones>=i) %>% nrow()
+  })
+  temp1[1] <- temp1[1]-temp1[2]
+  temp1[2] <- temp1[2]-temp1[3]
+  data.frame('patient'=p,'singlet'=temp1[1],'mid'=temp1[2],'expanded'=temp1[3])
+}) %>% mutate(total=singlet+mid+expanded) %>% 
+  mutate(across(c(expanded,mid,singlet),~.x/total)) %>% 
+  pivot_longer(c('singlet','mid','expanded')) %>%
+  arrange(patient) %>% mutate(patient=as.factor(patient)) %>%
+  filter(name=='expanded') %>% #comment out to show all
+  ggplot(aes(patient,value,fill=name))+geom_col(position='dodge') #position stack or fill to have stacked bars
+
