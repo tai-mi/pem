@@ -148,3 +148,106 @@ map_dfr(withTils,function(p){
   filter(name=='expanded') %>% #comment out to show all
   ggplot(aes(patient,value,fill=name))+geom_col(position='dodge') #position stack or fill to have stacked bars
 
+
+# integrate healthy ---------------------------------------------------------
+
+dat <- readRDS('data_misc/dat_healthy.rds')
+
+# Setup: run libraries, root, load rep2
+rep2 <- readRDS('data_misc/rep2.rds')
+cl <- readRDS('data_misc/clinical.rds')
+cl$sample <- as.character(cl$sample)
+
+# filter out patients without til data
+withTils <- rep2$meta %>% filter(timepoint=='til') %>% .$patient
+
+# convert dat_healthy to immunarch
+dat2 <- dat@contig_tbl %>% group_split(patient,timepoint) %>% 
+  map(~toImmunarch(.x))
+names(dat2) <- map(dat2, function(x) c(x$patient[1],if_else(is.na(x$timepoint[1]),'h',x$timepoint[1]))) %>% 
+  map(~paste(.x,collapse='-')) %>% unlist()
+
+names(rep1$data) %<>% paste0('-til')
+rep2 <- c(rep1$data,dat2)
+meta2 <- names(rep2) %>% str_split('-') %>% as.data.frame() %>% t() %>% 
+  as.data.frame() %>% set_colnames(c('patient','timepoint')) %>% 
+  left_join(cl,by=c('patient'='sample'))
+rep2 <- list(meta2,rep2) %>% set_names(c('meta','data'))
+
+rep2$data %<>% map(function(x){
+  x$V.name[x$V.name=='None'] <- NA
+  x$D.name[x$D.name=='None'] <- NA
+  x$J.name[x$J.name=='None'] <- NA
+  x
+})
+saveRDS(rep2,'data_misc/rep2_healthy.rds')
+
+
+# exp healthy full --------------------------------------------------------
+
+dat <- readRDS('data_misc/dat_healthy.rds')
+dat@cell_tbl$expTil <- 0
+dat@cell_tbl$expPbmc <- 0
+
+#### add data for healthy pbmc level
+rep2 <- readRDS('data_misc/rep2_healthy.rds')
+rep2$data <- rep2$data[rep2$meta$timepoint=='h']
+rep2$meta %<>% filter(timepoint=='h')
+
+map_dbl(rep2$data,nrow) %>% sort() 
+
+for(p in rep2$meta$patient %>% unique()){
+  for(i in c(1,2,8)){
+    seqs <- rep2$data[[paste0(p,'-h')]] %>% 
+      filter(Clones>=i) %>% .$CDR3.aa
+    bars <- dat@contig_tbl %>% 
+      filter(cdr3 %in% seqs,patient==p) %>% 
+      .$barcode %>% unique()
+    dat@cell_tbl$expPbmc[((dat@cell_tbl$barcode %in% bars)&
+                           (dat@cell_tbl$patient==p))] <- i
+    }}
+
+#### add pem til data
+rep2 <- readRDS('data_misc/rep2_healthy.rds')
+
+withTils <- rep2$meta %>% filter(timepoint=='til') %>% .$patient
+rep2$data <- rep2$data[rep2$meta$patient %in% withTils]
+rep2$meta %<>% filter(patient %in% withTils)
+
+map_dbl(rep2$data,nrow) %>% sort() 
+
+for(p in withTils){
+  for(i in c(1,2,8)){
+    seqs <- rep2$data[[paste0(p,'-til')]] %>% 
+      filter(Clones>=i) %>% .$CDR3.aa
+    for(tp in rep2$meta %>% filter(patient==p,timepoint!='til') %>% .$timepoint){
+      bars <- dat@contig_tbl %>% 
+        filter(cdr3 %in% seqs,timepoint==tp,patient==p) %>% 
+        .$barcode %>% unique()
+      dat@cell_tbl$expTil[((dat@cell_tbl$barcode %in% bars)&
+                             (dat@cell_tbl$patient==p)&
+                             (dat@cell_tbl$timepoint==tp))] <- i
+    }}}
+
+#### add pem pbmc data
+rep2 <- readRDS('data_misc/rep2_healthy.rds')
+
+rep2$data <- rep2$data[rep2$meta$timepoint %in% c('1','3','5')]
+rep2$meta %<>% filter(timepoint %in% c('1','3','5'))
+
+map_dbl(rep2$data,nrow) %>% sort() 
+# 23-1 and 20-5 have like nothing, 21-1 kinda low too (200)
+
+for(p in rep2$meta$patient %>% unique()){
+  for(i in c(1,2,8)){
+    for(tp in rep2$meta %>% filter(patient==p) %>% .$timepoint){
+      seqs <- rep2$data[[paste0(p,'-',tp)]] %>% 
+        filter(Clones>=i) %>% .$CDR3.aa
+      bars <- dat@contig_tbl %>% 
+        filter(cdr3 %in% seqs,timepoint==tp,patient==p) %>% 
+        .$barcode %>% unique()
+      dat@cell_tbl$expPbmc[((dat@cell_tbl$barcode %in% bars)&
+                             (dat@cell_tbl$patient==p)&
+                             (dat@cell_tbl$timepoint==tp))] <- i
+    }}}
+saveRDS(dat,'data_misc/dat_healthy.rds')
