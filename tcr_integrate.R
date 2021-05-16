@@ -50,6 +50,20 @@ trackCl2 <- function(p,...){
   trackClonotypes(temp,...)
 }
 
+combining <- function(dat1){
+  dat1@cell_tbl$combined <- 
+    paste(dat1@cell_tbl$barcode,
+          dat1@cell_tbl$patient %>% str_replace('^[a-zA-Z].*','healthy'),
+          tidyr::replace_na(dat1$cell_tbl$timepoint,''),
+          sep='_')
+  dat1@contig_tbl$combined <- 
+    paste(dat1@contig_tbl$barcode,
+          dat1@contig_tbl$patient %>% str_replace('^[a-zA-Z].*','healthy'),
+          tidyr::replace_na(dat1$contig_tbl$timepoint,''),
+          sep='_')
+  dat1
+}
+
 
 # integrate to immunarch --------------------------------------------------
 

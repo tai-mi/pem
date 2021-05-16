@@ -18,7 +18,7 @@ panglao2 <- function(clust){
 }
 
 
-# stuff2 ------------------------------------------------------------------
+# mark ------------------------------------------------------------------
 
 mark <- map(list.files('data_sc/mark_tc/'), function(p){
   p2 <- paste0('data_sc/mark_tc/',p)
@@ -33,7 +33,7 @@ mark %<>% set_names(paste0('c', list.files('data_sc/mark_tc/') %>%
 # marker functions --------------------------------------------------------
 
 sf2 <- function(gene){
-  gene <- 
+  gene <- toupper(gene)
   colnames(scaled)[str_detect(colnames(scaled),gene)]
 }
 
@@ -97,7 +97,7 @@ dev <- function(gene){
 scaled <- readRDS('data_sc/tc_scaled.rds') %>% 
   t() %>% as.data.frame()
 
-dev2 <- function(genes,center=0){
+dev2 <- function(genes,center=0,drop1=NULL){
   genes <- toupper(genes)
   if(length(genes)==1){
     x <- tibble('cluster'=as.numeric(rownames(scaled)),
@@ -106,7 +106,8 @@ dev2 <- function(genes,center=0){
     x <- tibble('cluster'=as.numeric(rownames(scaled)),
            expression=scaled[,genes] %>% rowSums())
   }
-  x %>% mutate(expression=expression-sum(range(expression))/2-center) %>% 
+  x$expression[x$cluster %in% as.character(drop1)] <- NA
+  x %>% mutate(expression=expression-sum(range(expression,na.rm=T))/2-center) %>% 
     arrange(cluster) %>% 
     ggplot()+geom_col(aes(cluster,expression,fill=as.factor(cluster)))+
     theme(axis.text.x=element_text(angle=90,),legend.position='none')+
@@ -114,3 +115,33 @@ dev2 <- function(genes,center=0){
     geom_hline(yintercept=0)+
     labs(title=genes)
 }
+
+# naive: SELL, CCR7; TCF7, TIM3?; CD44-, CD69- (earlier than 44)
+
+
+# eric --------------------------------------------------------------------
+
+id1 <- readxl::read_xlsx('data_markers/tc_eric.xlsx','Sheet1') %>% 
+  mutate(genes=toupper(genes) %>% replace_na(''),
+         type=str_replace_all(type,'ï','i'))
+
+addGene <- function(genes,clusts){
+  genes %<>% toupper()
+  if(length(genes)==1){
+    for(i in 1:nrow(id1)){
+      if(id1$cluster[i] %in% clusts){
+        id1$genes[i] <- paste0(id1$genes[i],',',genes)
+      }
+    }
+  } else if(length(clusts)==1){
+    id1$genes[id1$cluster==clusts] <- id1[id1$cluster==clusts,'genes'] %>% 
+      unlist() %>% append(genes)
+  }
+  id1
+}
+
+# using housekeeping genes c('gapdh','sdha','hprt1','hbs1l','ahsp','b2m'),
+# 26 is really high, then 27 and 18, then kinda 14/15/28
+# 6/7/9 really low, kinda 17
+
+# https://github.com/EDePasquale/DoubletDecon
