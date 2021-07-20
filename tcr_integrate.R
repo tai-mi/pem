@@ -243,7 +243,7 @@ for(p in rep2$meta$patient %>% unique()){
     }}}
 saveRDS(dat,'data_misc/dat_healthy.rds')
 
-# add contig expcon -------------------------------------------------------
+# new integration 7.20 -----------------------------------------------------
 
 #' uhhhhh so likeee what are we even doing here I mean I guess uhhhhhhhhhhhh
 #' hm so let's focus we need to do
@@ -297,12 +297,83 @@ dat <- canonicalize_cell(dat,contig_filter_args=chain=='TRB',
 #### first, branch this and commit, load rep1 into seurat from this branch
 # add repdata to seurat
  #' copy the whole seurat matching scheme, and add all cell_tbl to seurat meta
-# add seurat meta to cell_tbl
- # well i guess the same matching plan but reverse the joining direction and add cell types and any transcriptomics of interest
+ #' for this whole section, dat1 is seurat, dat is cella
+dat1@meta.data <- left_join(
+  mutate(dat1@meta.data,
+         temp=str_remove(rownames(dat1@meta.data),'(?<=-1).*'),
+         timepoint=tidyr::replace_na(timepoint,'h')),
+  mutate(dat@cell_tbl,
+         patient=case_when(str_starts(patient,'\\d')~patient,T~'healthy')) %>% 
+    select(barcode,patient,timepoint,expPbmc,expTil,expPost,cdr3,cdr3_nt,
+           v_gene,d_gene,j_gene,c_gene),
+  by=c('temp'='barcode','patient'='patient','timepoint'='timepoint'))
+dat@cell_tbl <- left_join(
+  dat@cell_tbl,
+  mutate(dat1@meta.data,
+         temp=str_remove(colnames(dat1),'(?<=-1).*'),
+         timepoint=tidyr::replace_na(timepoint,'h'),
+         patient=case_when(
+           str_starts(orig.ident,'PEM')~str_extract(orig.ident,'(?<=PEM)\\d+'),
+           orig.ident=='HD1'~'HA5876',orig.ident=='HD2'~'HA5877',
+           orig.ident=='HD3'~'HA5894',orig.ident=='HD4'~'HA5952',
+           orig.ident=='HD5'~'HA5953',orig.ident=='HD6'~'HA5957',
+           T~orig.ident)) %>% 
+    select(temp,timepoint,patient,integrated_snn_res.0.5,
+           integrated_snn_res.0.8,integrated_snn_res.1.1,
+           cluster_fine,cluster_coarse),
+  by=c('barcode'='temp','patient'='patient','timepoint'='timepoint'))
 # transfer seurat from cell to contig
-dat@contig_tbl %<>% left_join(select(dat@cell_tbl,barcode,patient,timepoint,
-                                     $$$seurat cols$$$),
-                              by=c('barcode','patient','timepoint'))
+dat@contig_tbl %<>% left_join(
+  select(dat@cell_tbl,barcode,patient,timepoint,integrated_snn_res.0.5,
+         integrated_snn_res.0.8,integrated_snn_res.1.1,
+         cluster_fine,cluster_coarse),
+  by=c('barcode','patient','timepoint'))
 # pseudo-bulk contigs and add to immunarch
-  # need to find best rep for each seurat col, vdjc genes,expPbmc,expTil,expPost
-  # filter to TRB
+choose1 <- function(x){#randomly chooses among most frequent of char_vec
+  x <- na.omit(x)
+  if(length(x)==0) NA
+  else if(length(x)==1) x
+  else{
+    table1 <- table(x)
+    sample(names(which(table1==max(table1))),1)
+  }
+}
+rep2 <- dat@contig_tbl %>% filter(chain=='TRB') %>% #this is slow, sorry
+  select(patient,timepoint,cdr3,v_gene,d_gene,j_gene,cdr3_nt,expPbmc,
+         expTil,expPost,integrated_snn_res.0.5,integrated_snn_res.0.8,
+         integrated_snn_res.1.1,cluster_coarse,cluster_fine) %>% 
+  group_split(patient,timepoint,cdr3) %>% 
+  map_dfr(function(y){
+    if(nrow(y)==1){
+      rename(y,V.name=v_gene,D.name=d_gene,J.name=j_gene,CDR3.nt=cdr3_nt)
+    } else{
+      data.frame(
+        y[1,c('patient','timepoint','cdr3','expPbmc','expTil','expPost')],
+        'V.name'=choose1(y$v_gene),'D.name'=choose1(y$d_gene),
+        'J.name'=choose1(y$j_gene),'CDR3.nt'=choose1(y$cdr3_nt),
+        'integrated_snn_res.0.5'=choose1(y$integrated_snn_res.0.5),
+        'integrated_snn_res.0.8'=choose1(y$integrated_snn_res.0.8),
+        'integrated_snn_res.1.1'=choose1(y$integrated_snn_res.1.1),
+        'cluster_coarse'=choose1(y$cluster_coarse),
+        'cluster_fine'=choose1(y$cluster_fine)
+      )
+    }
+  }) %>% rename(Clones=expPbmc,CDR3.aa=cdr3) %>% 
+  mutate(D.start=NA_integer_,D.end=NA_integer_,V.end=NA_integer_,
+         J.start=NA_integer_,VJ.ins=NA_integer_,DJ.ins=NA_integer_,
+         Sequence=NA_character_,
+         V.name=if_else(V.name=='None',NA_character_,V.name),
+         D.name=if_else(D.name=='None',NA_character_,D.name),
+         J.name=if_else(J.name=='None',NA_character_,J.name)) %>% 
+  group_split(patient,timepoint) %>%
+  map(~mutate(.x,Proportion=proportions(Clones)))
+names(rep2) <- map_chr(rep2,~paste0(.x$patient[1],'-',.x$timepoint[1]))
+rep2 <- list('data'=c(rep1$data,rep2))
+rep2$meta <- tibble(patient=str_extract(names(rep2$data),'.*(?=-)'),
+                    timepoint=str_extract(names(rep2$data),'.$')) %>% 
+  mutate(clinical=case_when(
+    patient=='healthy'~'Healthy',
+    patient %in% c('14','25','5','2','6','23')~'Lynch-like responder',
+    patient %in% c(18,19,22,20,12,11,13)~'Nonlynch-like responder',
+    T~'Nonresponder'
+  ))
