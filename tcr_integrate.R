@@ -6,7 +6,8 @@ library(immunarch)
 library(tidyverse)
 
 rep1 <- readRDS('data_misc/rep1.rds')
-dat <- readRDS('data_misc/dat.rds')
+dat <- readRDS('data_misc/dat_healthy.rds')
+cl <- readRDS('data_misc/clinical.rds')
 
 
 # root --------------------------------------------------------------------
@@ -15,15 +16,13 @@ dat <- readRDS('data_misc/dat.rds')
 toImmunarch <- function(df){
   nTot <- nrow(df)
   df <- add_count(df,cdr3)
-  df[!duplicated(df$cdr3),] %>% select(
+  df[!duplicated(df$cdr3),] %>% rename(
     Clones=n,
     CDR3.nt=cdr3_nt,
     CDR3.aa=cdr3,
     V.name=v_gene,
     D.name=d_gene,
-    J.name=j_gene,
-    patient,
-    timepoint
+    J.name=j_gene
   ) %>% mutate(
     V.end=NA,
     D.start=NA,
@@ -65,20 +64,20 @@ combining <- function(dat1){
 }
 
 
-# integrate to immunarch --------------------------------------------------
+# old integrate dat to immunarch -------------------------------------------
 
 # make an immunarch of everything
 dat2 <- dat@contig_tbl %>% group_split(patient,timepoint) %>% 
-  map(~toImmunarch(.x))
+  map(~toImmunarch(.x) %>% mutate(timepoint=replace_na(timepoint,'h')))
 names(dat2) <- map(dat2, function(x) c(x$patient[1],x$timepoint[1])) %>% 
   map(~paste(.x,collapse='-')) %>% unlist()
+# set as patient-timepoin, healthy timepoint is h and patient name is distict
 
-names(rep1$data) %<>% paste0('-til')
 rep2 <- c(rep1$data,dat2)
+rm(rep1)
 meta2 <- names(rep2) %>% str_split('-') %>% as.data.frame() %>% t() %>% 
   as.data.frame() %>% set_colnames(c('patient','timepoint')) %>% 
-  mutate(patient=as.numeric(patient)) %>% 
-  left_join(cl,by=c('patient'='sample'))
+  left_join(cl,by='patient')
 rep2 <- list(meta2,rep2) %>% set_names(c('meta','data'))
 
 rep2$data %<>% map(function(x){
@@ -90,34 +89,13 @@ rep2$data %<>% map(function(x){
 
 saveRDS(rep2,'data_misc/rep2.rds')
 
-# expcon -----------------------------------------------------------------
-
-rep2 <- readRDS('data_misc/rep2.rds')
-
-# scatterplot of proportion of each clone in one timepoint vs other
-propComp <- function(p,x,y){
-  # will error if patient is missing required data
-  joined <- full_join(rep2$data[[paste0(p,'-',x)]],
-                      rep2$data[[paste0(p,'-',y)]],
-                      by=c('CDR3.aa'))
-  # joined$Proportion.x[is.na(joined$Proportion.x)] <- 0
-  joined$Proportion.y[is.na(joined$Proportion.y)] <- 0
-  ggplot(joined,aes(Proportion.x,Proportion.y))+
-    geom_jitter()+scale_x_log10()+scale_y_log10()+
-    labs(title=paste(p,'-',x,'vs',y))
-}
-
-#' quantify proportion/prop of top clones from til that present in pbmc
-#' correlations between them?
-
 
 # expansion annotations ---------------------------------------------------
 
-# Setup: run libraries, root, load rep2
 rep2 <- readRDS('data_misc/rep2.rds')
 
 # filter out patients without til data
-withTils <- rep2$meta %>% filter(timepoint=='til') %>% .$patient
+withTils <- rep2$meta %>% filter(timepoint=='0') %>% .$patient
 rep2$data <- rep2$data[rep2$meta$patient %in% withTils]
 rep2$meta %<>% filter(patient %in% withTils)
 
@@ -165,11 +143,10 @@ map_dfr(withTils,function(p){
 
 # integrate healthy ---------------------------------------------------------
 
-dat <- readRDS('data_misc/dat_healthy.rds')
 
 # Setup: run libraries, root, load rep2
 rep2 <- readRDS('data_misc/rep2.rds')
-cl <- readRDS('data_misc/clinical.rds')
+cl <- readRDS('data_misc/clinical.rds') ### warning: cl has changed
 cl$sample <- as.character(cl$sample)
 
 # filter out patients without til data
@@ -265,3 +242,67 @@ for(p in rep2$meta$patient %>% unique()){
                              (dat@cell_tbl$timepoint==tp))] <- i
     }}}
 saveRDS(dat,'data_misc/dat_healthy.rds')
+
+# add contig expcon -------------------------------------------------------
+
+#' uhhhhh so likeee what are we even doing here I mean I guess uhhhhhhhhhhhh
+#' hm so let's focus we need to do
+#' 190477/197854 cells (with contigs)
+  #' many cells are still in cell_tbl but have contigs that have been filtered out
+  #' 8528 duplicated (so at most 8.5k with two TRBs, could be some with 3+)
+
+# setup
+rep1 <- readRDS('data_misc/rep1.rds')
+dat <- readRDS('data_misc/dat_healthy.rds')
+dat@contig_tbl$expTil <- c()
+dat@contig_tbl$expPbmc <- c()
+dat@cell_tbl$expTil <- c()
+dat@cell_tbl$expPbmc <- c()
+dat@contig_tbl %<>% mutate(timepoint=replace_na(timepoint,'h'))
+dat@cell_tbl %<>% mutate(timepoint=replace_na(timepoint,'h'))
+# add expPbmc to dat (all clones get same number, ie: all 80 matching contigs have expPbmc=80)
+dat@contig_tbl %<>% add_count(patient,timepoint,chain,cdr3,name='expPbmc')
+# create df of seqs and expTil
+h1 <- map_dfr(names(rep1$data),function(x){
+  rep1$data[[x]] %>% mutate(patient=str_extract(x,'.*(?=-)'),
+                            timepoint=str_extract(x,'.$'))
+}) %>% add_count(patient,timepoint,CDR3.aa,wt=Clones,name='expTil') %>% 
+  select(CDR3.aa,patient,timepoint,expTil) %>%
+  unique() #add_count leaves the duplicated in, need to remove
+# add expTil and expPost to pbmc
+h1 <- left_join(filter(dat@contig_tbl,chain=='TRB'),
+                filter(h1,timepoint=='0') %>% select(-timepoint),
+                by=c('patient'='patient','cdr3'='CDR3.aa')) %>% 
+  left_join(filter(h1,timepoint=='7') %>% rename(expPost=expTil) %>% 
+              select(-timepoint),
+            by=c('patient'='patient','cdr3'='CDR3.aa'))
+dat@contig_tbl <- rbind(filter(dat@contig_tbl,chain=='TRA') %>% 
+                          mutate(expTil=NA_integer_,expPost=NA_integer_),
+                        h1)
+rm(h1) #42018/199005 TRBs have expTil, 8018/42589 TRB have expPost
+# map contig characteristics to cells
+  # have 28634 duplicate contigs - up to that many cells with mult TRB
+  # only mapping contig chars, sort by expPbmc more accurate to represent cdr3
+dat <- canonicalize_cell(dat,contig_filter_args=chain=='TRB',
+                         tie_break_keys=c('expPbmc','umis'),
+                         contig_fields=c('cdr3','cdr3_nt','v_gene','d_gene',
+                                         'j_gene','c_gene','expPbmc'))
+  #190477 have cdr3 - all of them with TRB contigs
+# add expansion annotations to cells
+  # canonicalize doesn't necessarily retain highest exptil/post since sort by pbmc
+dat <- canonicalize_cell(dat,contig_filter_args=chain=='TRB',
+                         tie_break_keys='expTil',contig_fields='expTil')
+dat <- canonicalize_cell(dat,contig_filter_args=chain=='TRB',
+                         tie_break_keys='expPost',contig_fields='expPost')
+#### first, branch this and commit, load rep1 into seurat from this branch
+# add repdata to seurat
+ #' copy the whole seurat matching scheme, and add all cell_tbl to seurat meta
+# add seurat meta to cell_tbl
+ # well i guess the same matching plan but reverse the joining direction and add cell types and any transcriptomics of interest
+# transfer seurat from cell to contig
+dat@contig_tbl %<>% left_join(select(dat@cell_tbl,barcode,patient,timepoint,
+                                     $$$seurat cols$$$),
+                              by=c('barcode','patient','timepoint'))
+# pseudo-bulk contigs and add to immunarch
+  # need to find best rep for each seurat col, vdjc genes,expPbmc,expTil,expPost
+  # filter to TRB

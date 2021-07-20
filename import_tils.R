@@ -13,13 +13,21 @@ cl <- readRDS('data_misc/clinical.rds')
 
 require(immunarch)
 
-rep1 <- repLoad('data_tils/')
-rep1$meta %<>% mutate(patient=str_extract(Sample,'\\d+') %>% as.numeric()) %>%
-  left_join(cl,by=c('patient'='sample')) %>% select(-Sample)
-rep1$data %<>% set_names(rep1$meta$patient %>% as.character())
+rep1 <- repLoad('data_tils/') #misparses vj gene ties, will ignore for now
+rep1$meta %<>% mutate(orig.file=Sample,
+                      Sample=str_remove_all(Sample,'_'),
+                      patient=as.numeric(str_extract(Sample,'(?<=PEM)\\d+')) %>% 
+                        as.character(),
+                      timepoint=if_else(str_detect(Sample,'R(?=TIL)'),'7','0'),
+                      #timepoint sets pre as 0 and post as 7
+                      group='til') %>%
+  select(-Sample) 
+rep1$data %<>% set_names(paste0(rep1$meta$patient,'-',rep1$meta$timepoint))
 
-# filter all coding and inframe (doesn't change anything for these)
+# filter all coding and inframe 
 rep1$data <- map(rep1$data,~coding(.x) %>% inframes())
+# map_dbl(rep1$data,~nrow(.x)) %>% sort() #both for 7 are low, kinda 8-0 and 3-0
+# map_dbl(rep1$data,~sum(.x$Clones)) %>% sort()
 
 saveRDS(rep1,'data_misc/rep1.rds')
 
@@ -39,16 +47,17 @@ repClonality(rep1$data,'top',.head=c(1,10,100)) %>% vis()
 
 repOverlap(rep1$data,'overlap') %>% vis('heatmap2')
 repOverlap(rep1$data,'jaccard') %>% vis('heatmap2')
-# repOverlap(rep1$data,'tversky',.a=0.1,.b=0.5) %>% vis('heatmap2')
-morRep <- repOverlap(rep1$data,'morisita')
-morRep %>% vis('heatmap2')
-# kinda a mess, jaccard/tversky are dominated by 14-18, overlap by 19-14, and morisita by 13-7
+h1 <- repOverlap(rep1$data,'morisita')
+h1 %>% vis('heatmap2')
+# strong cluster of 0-7 pairs for all of them; with 7s removed,a few pairs, but not clinically related
 
-repOverlapAnalysis(morRep,'tsne') %>% vis()
+repOverlapAnalysis(h1,'tsne') %>% vis()
 repOverlapAnalysis(repOverlap(rep1$data,'jaccard'),'tsne') %>% vis()
 repOverlapAnalysis(repOverlap(rep1$data,'overlap'),'tsne') %>% vis()
 
-repDiversity(rep1$data,'inv.simp') %>% mutate(Sample=as.factor(Sample)) %>% ggplot(aes(Sample,Value,fill=Sample))+geom_col()
+repDiversity(rep1$data,'inv.simp') %>% mutate(Sample=as.factor(Sample)) %>% 
+  ggplot(aes(Sample,Value,fill=Sample))+geom_col()+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=90),legend.pos='none')
 repSample(rep1$data,'downsample') %>% repDiversity('raref') %>% vis()
 map(rep1$data,function(x){
   s2 <- 1000
