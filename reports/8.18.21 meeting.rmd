@@ -1,0 +1,146 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+# knitr::opts_knit$set(root.dir=normalizePath('C:/Users/spamt/OneDrive/Documents/program data/r projects/pem/'))
+
+library(magrittr)
+# library(CellaRepertorium)
+library(immunarch)
+library(tidyverse)
+```
+```{r setup2}
+rep4 <- readRDS('data_misc/rep4.rds')
+# cella <- readRDS('data_misc/cella4.rds')
+cl <- readRDS('data_misc/clinical.rds')
+# dat <- readRDS('data_sc/meta_ldat.rds') %>% 
+dat <- readRDS('data_sc/meta_tc.rds') %>% 
+  mutate(patient=case_when(
+    str_starts(orig.ident,'P')~str_extract(orig.ident,'(?<=PEM)\\d+'),
+    str_starts(orig.ident,'eric')~orig.ident,
+    orig.ident=='HD1'~'HA5876',orig.ident=='HD2'~'HA5877',
+    orig.ident=='HD3'~'HA5894',orig.ident=='HD4'~'HA5952',
+    orig.ident=='HD5'~'HA5953',orig.ident=='HD6'~'HA5957',
+    T~NA_character_))
+
+add_clinical <- function(df,patient_col='patient'){
+  p1 <- df[[patient_col]]
+  df$clinical <- case_when(
+    p1=='healthy'~'Healthy',
+    p1 %in% c('14','25','5','2','6','23')~'Lynch-like responder',
+    p1 %in% c('18','19','22','20','12','11','13')~'Nonlynch-like responder',
+    p1 %in% c('1','3','7','8','9','10','15','16','17','21','24','26')~'Nonresponder',
+    stringr::str_starts(p1,'(HD)|(HA)|(eric)')~'Healthy',
+    T~NA_character_)
+  if(any(is.na(df$clinical))) warning('invalid patient code')
+  df
+}
+cella@contig_tbl %<>% add_clinical()
+cella@cell_tbl %<>% add_clinical()
+
+plotBoxplot <- function(df,value_col='Value',patient_col1='patient'){
+  df$Value <- df[[value_col]]
+  ggplot(df,aes(clinical,Value,fill=clinical))+
+    geom_boxplot(outlier.alpha=0)+geom_jitter(width=0.05,height=0)
+}
+
+require(ggprism)
+cols_clinical <- c('Lynch-like responder'='#D25B3F','Nonlynch-like responder'='#356870','Nonresponder'='#8D7233','Healthy'='#3C367E')
+cols_clinical_dark <- colorspace::darken(cols_clinical,0.6) %>% set_names(c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))
+```
+
+### aggregated data (slides 15/16)
+```{r proportions of t cells}
+filter(dat,cluster_coarse!='Junk') %>% select(cluster_coarse,clinical) %>% 
+  table() %>% as.data.frame.matrix() %>% rownames_to_column('cluster_coarse') %>% 
+  mutate(across(-cluster_coarse,.fns=proportions)) %>% 
+  filter(cluster_coarse=='CD8 Activated') %>% 
+  pivot_longer(-cluster_coarse) %>% 
+  ggplot(aes(reorder(name,value),value,fill=name))+geom_col()+theme_void()
+```
+
+```{r proportion of t cells split by fine type}
+filter(dat,cluster_coarse!='Junk') %>% select(cluster_fine,clinical) %>% 
+  table() %>% as.data.frame.matrix() %>% rownames_to_column('clust') %>% 
+  mutate(across(-clust,.fns=proportions)) %>% 
+  filter(clust %in% c('CD8 Effector Memory','CD8 TEMRA')) %>% 
+  pivot_longer(-clust) %>% 
+  ggplot(aes(name,value,fill=factor(clust,c('CD8 TEMRA','CD8 Effector Memory'))))+geom_col(position='stack')+theme(legend.title=element_blank())
+```
+
+```{r proportions of overall}
+h1 <- readRDS('data_sc/meta_ldat.rds')
+h1 <- table(h1$clinical) %>% as.vector()
+h2 <- select(dat,cluster_coarse,clinical) %>% table()
+t(t(h2)/as.vector(h1)) %>% as.data.frame() %>% 
+  filter(cluster_coarse=='CD8 Activated') %>% 
+  ggplot(aes(reorder(clinical,Freq),Freq,fill=clinical))+geom_col()+theme_void()
+```
+
+### data split by patient/timepoint (more accurate version of 15/16)
+looks a lot less clean for lynch like, but still a notable difference since pretty much all of them are above the median for the other clinical groups except patient 23 who just has like no cells
+```{r proportions of t cells split by patient}
+group_split(dat,patient,timepoint) %>% 
+  map(~table(.x$cluster_coarse) %>% as.data.frame() %>% 
+        set_names('type',paste0(.x$patient[1],'-',.x$timepoint[1]))) %>% 
+  reduce(left_join,by='type') %>% 
+  mutate(across(-type,~proportions(replace_na(.x,0)))) %>% 
+  pivot_longer(-type,values_to='prop') %>% 
+  separate(name,c('patient','timepoint')) %>% 
+  filter(!(interaction(patient,timepoint) %in% c('20.5','23.1')),
+         type=='CD8 Activated') %>% 
+  add_clinical() %>% plotBoxplot('prop')+ggrepel::geom_text_repel(aes(label=interaction(patient,timepoint)),max.overlaps=100)
+```
+
+```{r proportion of overall split by patient}
+h1 <- readRDS('data_sc/meta_ldat.rds')
+h1 <- table(h1$patient,h1$timepoint) %>% as.data.frame() %>% 
+  filter(Freq!=0) %>% arrange(as.character(Var1),Var2) %>% .$Freq
+h2 <- group_split(dat,patient,timepoint) %>% 
+  map(~table(.x$cluster_coarse) %>% as.data.frame() %>% 
+        set_names('type',paste0(.x$patient[1],'-',.x$timepoint[1]))) %>% 
+  reduce(left_join,by='type')
+t(t(h2[,-1])/h1) %>% as.data.frame() %>% mutate(type=h2$type) %>% 
+  pivot_longer(-type,values_to='prop') %>% 
+  separate(name,c('patient','timepoint')) %>% 
+  filter(!(interaction(patient,timepoint) %in% c('20.5','23.1')),
+         type=='CD8 Activated') %>% 
+  add_clinical() %>% plotBoxplot('prop')+ggrepel::geom_text_repel(aes(label=interaction(patient,timepoint)),max.overlaps=100)
+```
+
+### clonality (slides 18/19)
+
+```{r pretreatment}
+rep4$data %>% 
+  repDiversity(.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% 
+  add_clinical() %>% mutate(clinical=factor(clinical,c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))) %>% 
+  filter(timepoint %in% c(1,'h')) %>%
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical))+
+  geom_boxplot(lwd=1.5)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=30,hjust=1,vjust=1))+
+  theme_prism(axis_text_angle=45,base_size=12)+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)+
+  ylab('Inverse simpson index')
+```
+
+```{r posttreatment}
+rep4$data %>% 
+  # map(~filter(.x,cluster_fine=='CD8 TEMRA')) %>%
+  repDiversity(.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% 
+  add_clinical() %>% mutate(clinical=factor(clinical,c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))) %>% 
+  filter(timepoint %in% c('3','5','h')) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical))+
+  geom_boxplot(lwd=1.5)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=30,hjust=1,vjust=1))+
+  theme_prism(axis_text_angle=45,base_size=12)+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)+
+  ylab('Inverse simpson index')
+```
