@@ -1,0 +1,248 @@
+---
+title: "figures_important2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=F,message=F,warning=F)
+
+source('figures_source.r')
+load_tcr()
+dat <- load_main('ldat')
+require(ggprism)
+```
+
+```{r cell count heatmap}
+h1 <- filter(dat,cluster_fine %!in% c('Junk','Platelets','Platelet Mix','Erythrocytes')) %>%  
+  # mutate(cluster_fine=factor(cluster_fine)) %>% 
+  group_split(patient,timepoint) %>% map_dfr(function(x){
+    table1 <- table(x$cluster_fine) %>% proportions()
+    data.frame(
+      'patient'=x$patient[1],
+      'timepoint'=x$timepoint[1],
+      'type'=names(table1),
+      'prop'=as.numeric(table1)
+    )
+  }) %>% add_clinical
+
+# regular
+mutate(h1,timepoint=case_when(timepoint==1~'pre',timepoint %in% c(3,5)~'post',
+                              T~timepoint)) %>% 
+  group_by(clinical,type,timepoint) %>% 
+  summarize(value=mean(prop),value2=median(prop)) %>% 
+  mutate(group=interaction(clinical,timepoint)) %>% 
+  filter(type!='T Cells') %>% 
+  mutate(type=factor(type,levels=c(
+    'CD16 NK','CD56 NK','CD14 Monocytes','Intermediate Monocytes',
+    'CD16 Monocytes','Activated B Cells','Memory B Cells','Naive B Cells',
+    'Plasma Cells','cDC','pDC','Hematopoetic Progenitors') %>% rev()),
+    group=factor(group,levels=c(
+      'Healthy.h','Lynch-like responder.pre','Nonlynch-like responder.pre',
+      'Nonresponder.pre','Lynch-like responder.post',
+      'Nonlynch-like responder.post','Nonresponder.post'))) %>%
+  ggplot(aes(group,type,fill=value2))+geom_tile()+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  scale_fill_viridis_c()
+mutate(h1,timepoint=case_when(timepoint==1~'pre',timepoint %in% c(3,5)~'post',
+                              T~timepoint)) %>% 
+  group_by(clinical,type,timepoint) %>% 
+  summarize(value=mean(prop),value2=median(prop)) %>% 
+  mutate(group=interaction(clinical,timepoint)) %>% 
+  filter(type=='T Cells') %>% 
+  mutate(group=factor(group,levels=c(
+      'Healthy.h','Lynch-like responder.pre','Nonlynch-like responder.pre',
+      'Nonresponder.pre','Lynch-like responder.post',
+      'Nonlynch-like responder.post','Nonresponder.post'))) %>%
+  ggplot(aes(group,type,fill=value2))+geom_tile()+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  scale_fill_viridis_c()
+
+# binary
+h1 %<>% mutate(clinical=if_else(str_starts(clinical,'N'),'Methylated',clinical))
+mutate(h1,timepoint=case_when(timepoint==1~'pre',timepoint %in% c(3,5)~'post',
+                              T~timepoint)) %>% 
+  group_by(clinical,type,timepoint) %>% 
+  summarize(value=mean(prop),value2=median(prop)) %>% 
+  mutate(group=interaction(clinical,timepoint)) %>% 
+  filter(type!='T Cells') %>% 
+  mutate(type=factor(type,levels=c(
+    'CD16 NK','CD56 NK','CD14 Monocytes','Intermediate Monocytes',
+    'CD16 Monocytes','Activated B Cells','Memory B Cells','Naive B Cells',
+    'Plasma Cells','cDC','pDC','Hematopoetic Progenitors') %>% rev()),
+    group=factor(group,levels=c(
+      'Healthy.h','Lynch-like responder.pre','Methylated.pre',
+      'Lynch-like responder.post','Methylated.post'))) %>%
+  ggplot(aes(group,type,fill=value2))+geom_tile()+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  scale_fill_viridis_c()
+mutate(h1,timepoint=case_when(timepoint==1~'pre',timepoint %in% c(3,5)~'post',
+                              T~timepoint)) %>% 
+  group_by(clinical,type,timepoint) %>% 
+  summarize(value=mean(prop),value2=median(prop)) %>% 
+  mutate(group=interaction(clinical,timepoint)) %>% 
+  filter(type=='T Cells') %>% 
+  mutate(group=factor(group,levels=c(
+      'Healthy.h','Lynch-like responder.pre','Methylated.pre',
+      'Lynch-like responder.post','Methylated.post'))) %>%
+  ggplot(aes(group,type,fill=value2))+geom_tile()+
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  scale_fill_viridis_c()
+```
+
+```{r pretreatment TEMRA prop overall}
+dat <- load_main('tc')
+h2 <- load_main('ldat') %>% 
+  mutate(temp=paste0(patient,'-',timepoint)) %>% 
+  .$temp %>% table()
+h1 <- table(paste0(dat$patient,'-',dat$timepoint),dat$cluster_fine) %>% 
+  as.data.frame() %>% mutate(patient=str_extract(Var1,'^.*(?=-)')) %>% 
+  rename(type=Var2) %>% add_clinical() %>% filter(Var1 %!in% c('20-5','23-1')) %>% 
+  rowwise() %>% mutate(value=Freq/h2[Var1]) %>% 
+  separate(Var1,c('patient','timepoint')) %>% 
+  filter(type=='CD8 TEMRA',timepoint=='1') 
+h1
+```
+
+```{r pretreatment clonality}
+h1 <- rep4$data[!(names(rep4$data) %in% c('20-5','23-1'))] %>% 
+  repDiversity('inv.simp') %>% 
+  separate(Sample,c('patient','timepoint')) %>% add_clinical() %>% 
+  mutate(Value=1/Value) #makes simpson index (higher is more clonal)
+# standard
+filter(h1,timepoint %in% c('1','h')) %>% 
+  group_by(clinical) %>% 
+  ggplot(aes(
+    factor(clinical,levels=c('Lynch-like responder','Nonlynch-like responder',
+                             'Nonresponder','Healthy')),
+    Value,color=clinical,fill=clinical)) %>%
+  prism()+geom_boxplot(outlier.alpha=0,lwd=2)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=-45,hjust=0,vjust=1),legend.pos='none')+
+  labs(x='',y='Simpson index',title='Pretreatment clonality')+
+  scale_x_discrete(labels=c('Lynch-like','NLR','Nonresponder','Healthy'))
+# methylated
+filter(h1,timepoint %in% c('1','h')) %>% 
+  mutate(clinical=if_else(str_starts(clinical,'N'),'Methylated',clinical)) %>% 
+  group_by(clinical) %>% 
+  ggplot(aes(clinical,
+    Value,color=clinical,fill=clinical)) %>%
+  prism()+geom_boxplot(outlier.alpha=0,lwd=2)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=-45,hjust=0,vjust=1),legend.pos='none')+
+  labs(x='',y='Simpson index',title='Pretreatment clonality')
+```
+
+```{r pretreatment TM prop}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))&
+                  (!(names(rep4$data) %in% c('20-5','23-1')))]
+h1 <- map_dbl(h1,~sum(.x$Clones[!is.na(.x$expTil)])/sum(.x$Clones)) %>%
+  set_names(names(h1)) %>% data.frame('prop'=`.`) %>%
+  rownames_to_column() %>% separate(rowname,c('patient','timepoint')) %>% 
+  add_clinical()
+plotErrorbar1(group_by(filter(h1,timepoint=='1'),clinical),value_col='prop',T,2)+
+  theme(legend.pos='none')+
+  labs(y='Proportion of T cells',title='Proportion tumor matching')
+```
+
+```{r clonotype size rarefaction}
+clone_prop <- function(df,n,margin='seqs'){
+  if(margin=='seqs') sum(filter(df,Clones>=n)$Proportion)
+  else if(margin=='clones') mean(df$Clones>=n)
+  else stop('invalid margin')
+}
+clone_curve2 <- function(dfs,margin='seqs',max1=20,stop1=F,meth1=F){
+  clone_curve <- function(df,margin='seqs',max1=20){
+    map_dfr(1:max1,function(i){
+      data.frame('n'=i,'prop'=clone_prop(df=df,n=i,margin=margin))
+    })
+  }
+  if(any(class(dfs)=='data.frame')){
+    out <- clone_curve(df=dfs,margin=margin,max1=max1) %>% 
+      mutate(patient='?',clinical='?',timepoint='?')
+  }
+  else if(any(class(dfs)=='list')){
+    dfs %<>% map(~mutate(.x,Proportion=proportions(Clones)))
+    out <- map_dfr(dfs,.id='name',~clone_curve(df=.x,margin=margin,max1=max1)) %>% 
+      separate(name,c('patient','timepoint')) %>% add_clinical()
+  }
+  # we need to uhh
+  if(meth1) out %<>% mutate(clinical=if_else(str_starts(clinical,'N'),'Methylated',clinical))
+  h1 <- add_count(out,clinical,n,name='count') %>% 
+    group_by(clinical,n) %>%
+    summarize(serr=sd(prop)/sqrt(count[1]),prop=mean(prop)) %>% ungroup()
+  if(stop1) return(h1)
+  else{
+    ggplot(h1,aes(n,prop,color=clinical))+
+    geom_point(size=1.25,position=position_dodge(width=0.2))+
+    geom_line(aes(group=clinical),position=position_dodge(width=0.2),lwd=0.75)+
+    geom_errorbar(aes(ymin=prop-serr,ymax=prop+serr),width=0.2,
+                  position=position_dodge(width=0.2))+
+    ylim(c(0,1))+
+    labs(y=paste('Proportion of',margin),x='Size threshold')
+  }
+}
+
+# standard
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+     (!(names(rep4$data) %in% c('23-1','21-1')))] %>%
+       repSample('downsample',.prob=T))+ #removed 21-1 because drops downsample to 115 seqs
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Pretreatment')
+# data
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+     (!(names(rep4$data) %in% c('23-1','21-1')))] %>%
+       repSample('downsample',.prob=T),stop1=T)
+
+# methylated
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+     (!(names(rep4$data) %in% c('23-1','21-1')))] %>%
+       repSample('downsample',.prob=T),meth1=T)+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  labs(title='Pretreatment')
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+     (!(names(rep4$data) %in% c('23-1','21-1')))] %>%
+       repSample('downsample',.prob=T),stop1=T,meth1=T)
+```
+
+```{r pretreatment circos}
+circosSpectra <- function(mask1,ab){
+  # mask for which of repdata and whether a or b
+  require(circlize)
+  vj <- map_dfr(rep4$data[mask1],~.x) %>% 
+    select(Proportion,J.name,V.name) %>% 
+    filter(str_starts(V.name,paste0('TR',toupper(ab),'V')),
+           str_starts(J.name,paste0('TR',toupper(ab),'J'))) %>% 
+    na.omit() %>% group_by(J.name,V.name) %>% 
+    summarise(total=sum(Proportion))
+  temp1 <- vj %>% group_by(V.name) %>% summarise(total=sum(total))
+  vj$V.name[vj$V.name %in% temp1$V.name[temp1$total<(sum(temp1$total)/100)]] <- paste0('TR',toupper(ab),'V-other')
+  temp1 <- vj %>% group_by(J.name) %>% summarise(total=sum(total))
+  vj$J.name[vj$J.name %in% temp1$J.name[temp1$total<(sum(temp1$total)/100)]] <- paste0('TR',toupper(ab),'J-other')
+  circos.clear()
+  circos.par(gap.degree=0,
+             gap.after=c(rep(0.2,length(unique(vj$J.name))-1),5,
+                         rep(0.2,length(unique(vj$V.name))-1),5))
+  colorFunct <- colorRamp2(
+    c(max(vj$total),median(vj$total),min(vj$total)) %>% rev(),
+    RColorBrewer::brewer.pal(3,'YlOrRd'),transparency=0.4)
+  chordDiagram(vj,annotationTrack='grid',
+               preAllocateTracks=1,
+               col=colorFunct,link.sort=T)
+  circos.trackPlotRegion(track.index = 1,panel.fun = function(x, y) {
+    sector.name = get.cell.meta.data("sector.index")
+    circos.text(CELL_META$xcenter,CELL_META$ylim[1],CELL_META$sector.index,
+                facing = "clockwise", niceFacing=T,
+                cex=0.7,track.index=1,adj=c(0,0.5))
+    # circos.axis(h = "top", labels.cex = 0.5, major.tick.length = 0.1,
+    #             sector.index=CELL_META$sector.index, track.index = 2)
+  }, bg.border = NA)
+}
+
+# pretreatment standard
+set.seed(13)
+circosSpectra((rep4$meta$clinical=='Lynch-like responder')&(rep4$meta$timepoint=='1')&(rep4$meta$patient!='23'),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonlynch-like responder')&(rep4$meta$timepoint=='1')),4)),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonresponder')&(rep4$meta$timepoint=='1')),4)),'b')
+
+# pretreatment methylated
+circosSpectra((1:length(rep4$data)) %in% (sample(which(str_starts(rep4$meta$clinical,'N')&(rep4$meta$timepoint=='1')),4)),'b')
+```
+

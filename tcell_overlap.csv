@@ -1,0 +1,31 @@
+source,target,timepoint,clinical,value
+cDC,T cells,pre,l,145
+cDC,T cells,pre,nlr,137
+cDC,T cells,pre,nr,144
+cDC,T cells,post,l,145
+cDC,T cells,post,nlr,140
+cDC,T cells,post,nr,147
+CD14 Monocytes,T cells,pre,l,125
+CD14 Monocytes,T cells,pre,nlr,122
+CD14 Monocytes,T cells,pre,nr,131
+CD14 Monocytes,T cells,post,l,126
+CD14 Monocytes,T cells,post,nlr,130
+CD14 Monocytes,T cells,post,nr,130
+pDC,T cells,pre,l,98
+pDC,T cells,pre,nlr,111
+pDC,T cells,pre,nr,111
+pDC,T cells,post,l,98.4
+pDC,T cells,post,nlr,117
+pDC,T cells,post,nr,106
+Intermediate Monocytes,T cells,pre,l,147
+Intermediate Monocytes,T cells,pre,nlr,137
+Intermediate Monocytes,T cells,pre,nr,139
+Intermediate Monocytes,T cells,post,l,152
+Intermediate Monocytes,T cells,post,nlr,144
+Intermediate Monocytes,T cells,post,nr,143
+CD16 Monocytes,T cells,pre,l,142
+CD16 Monocytes,T cells,pre,nlr,132
+CD16 Monocytes,T cells,pre,nr,129
+CD16 Monocytes,T cells,post,l,143
+CD16 Monocytes,T cells,post,nlr,139
+CD16 Monocytes,T cells,post,nr,138

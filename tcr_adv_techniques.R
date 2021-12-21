@@ -103,7 +103,7 @@ repOverlap(rep$data[(rep$meta$timepoint!='healthy')&(rep$meta$patient %in% filte
   ggplot(aes(Var1,value,fill=timepoint))+geom_col(position='dodge')+
   theme(axis.text.x=element_text(angle=-90))+
   labs(y='Jaccard Similarity',x='Patient',
-       title='TIL-PBMC repertoire similarity')+
+       title='TIL-PBMC repertoire similarity')
 
 #circos spectratype
 circosSpectra <- function(mask1,ab){
@@ -130,7 +130,7 @@ circosSpectra <- function(mask1,ab){
                col=colorFunct,link.sort=T,)
   circos.trackPlotRegion(track.index = 1,panel.fun = function(x, y) {
     sector.name = get.cell.meta.data("sector.index")
-    circos.text(CELL_META$xcenter,CELL_META$ylim[1],CELL_META$sector.index, 
+    circos.text(CELL_META$xcenter,CELL_META$ylim[1],CELL_META$sector.index,
                 facing = "clockwise", niceFacing=T,
                 cex=0.7,track.index=1,adj=c(0,0.5))
     # circos.axis(h = "top", labels.cex = 0.5, major.tick.length = 0.1,
@@ -138,8 +138,6 @@ circosSpectra <- function(mask1,ab){
   }, bg.border = NA)
 }
 circosSpectra(rep$meta$lynch,'b')
-#### reorder by size with other last
-#### do this for top clonotypes? use raw output from trackClono?
 
 
 # cella -------------------------------------------------------------------

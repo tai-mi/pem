@@ -1,0 +1,1703 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup,include=F}
+knitr::opts_chunk$set(echo=F,message=F,warning=F)
+
+source('figures_source.r')
+load_tcr()
+dat <- load_main('ldat')
+require(ggprism)
+```
+
+### Diversity
+
+#### overall diversity
+
+##### raw diversity
+
+```{r overall diversity root 1}
+h1 <- rep4$data[!(names(rep4$data) %in% c('20-5','23-1'))] %>% 
+  repDiversity('inv.simp') %>% 
+  separate(Sample,c('patient','timepoint')) %>% add_clinical()
+```
+
+```{r pbmc overall}
+filter(h1,timepoint %in% c('1','3','5','h')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r pbmc pretreatment}
+h2 <- filter(h1,timepoint %in% c('1','h'))
+group_by(h2,clinical) %>% 
+  ggplot(aes(
+    factor(clinical,levels=c('Lynch-like responder','Nonlynch-like responder',
+                             'Nonresponder','Healthy')),
+    Value,color=clinical,fill=clinical)) %>%
+  prism()+geom_boxplot(outlier.alpha=0,lwd=2)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=-45,hjust=0,vjust=1),legend.pos='none')+
+  labs(x='',y='Inverse simpson index',title='Pretreatment diversity')+
+  scale_x_discrete(labels=c('Lynch-like','NLR','Nonresponder','Healthy'))
+# mutate(h2,Value=log10(Value)) %>% group_by(clinical) %>% plotErrorbar1(plot=1)+
+#   labs(y='Log inverse simpson index',x='',title='Pretreatment diversity')
+```
+
+```{r pbmc posttreatment,dependson="overall diversity root 1"}
+h2 <- filter(h1,timepoint %in% c('3','5','h'))
+group_by(h2,clinical) %>% 
+  ggplot(aes(
+    factor(clinical,levels=c('Lynch-like responder','Nonlynch-like responder',
+                             'Nonresponder','Healthy')),
+    Value,color=clinical,fill=clinical)) %>%
+  prism()+geom_boxplot(outlier.alpha=0,lwd=2)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=-45,hjust=0,vjust=1),legend.pos='none')+
+  labs(x='',y='Inverse simpson index',title='Posttreatment diversity')+
+  scale_x_discrete(labels=c('Lynch-like','NLR','Nonresponder','Healthy'))
+```
+
+```{r pbmc timepoint 5}
+filter(h1,timepoint %in% c('5','h')) %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r pbmc split timepoint box}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()+facet_wrap(~timepoint)+
+  theme(axis.text.x=element_blank())
+```
+
+```{r pbmc split timepoint line+errorbars}
+filter(h1,timepoint %in% c('1','3','5','h')) %>% 
+  mutate(Value=log10(Value)) %>% #weird geom mean geom sterr stuff here
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),width=0.1,
+                position=position_dodge(width=0.15),lwd=1)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r pbmc split timepoint line+errorbars (3-5 combined)}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value),timepoint=if_else(
+    timepoint=='1','Pretreatment','Posttreatment') %>% 
+      factor(levels=c('Pretreatment','Posttreatment'))) %>%
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=3,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1.2,width=0.2)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),
+                position=position_dodge(width=0.15),lwd=1.2,width=0.2)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)+
+  labs(y='Inverse simpson index',x='',title='Diversity over time')+
+  theme(legend.pos='none')
+```
+
+```{r TIL}
+filter(h1,timepoint=='0') %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+##### Change in diversity
+
+```{r overall diversity root 2,dependson="overall diversity root 1"}
+h2 <- filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value)) %>% #Values already log scaled
+  pivot_wider(id_cols=patient,names_from=timepoint,values_from=Value)
+```
+
+```{r 1-3-5 line plot (proportional)}
+na.omit(h2) %>% mutate(`3`=(`3`-`1`)/`1`,`5`=(`5`-`1`)/`1`,`1`=0) %>% 
+  pivot_longer(-patient) %>% add_clinical() %>% ggplot(aes(name,value))+
+  geom_line(aes(group=patient,color=clinical),lwd=1.2)+
+  labs(y='Proportional change',x='Timepoint',title='Diversity over time')+
+  theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r beta diversity timepoints,eval=F}
+map(rep4$data[rep4$meta$timepoint %in% c(1,3,5)] %>% names(),function(x){
+  select(rep4$data[[x]],CDR3.aa,Proportion) %>% set_names(c('cdr3',x))
+}) %>% reduce(full_join,by='cdr3') %>% column_to_rownames('cdr3') %>% 
+  mutate(across(.fns=replace_na,replace=0)) %>% t() %>% 
+  vegan::betadiver(method='w')
+```
+
+```{r rainfall of div change (proportional)}
+mutate(h2,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+```{r errobars of div change (proportional)}
+mutate(h2,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  group_by(clinical) %>% summarize(Value=mean(`5-1`),serr=sd(`5-1`)/sqrt(n())) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical)) %>% prism()+geom_col()+
+  geom_errorbar(aes(ymin=Value-serr,ymax=Value+serr),width=0.2,lwd=1)+
+  theme(axis.text.x=element_blank())
+```
+
+```{r errorbars of div change for each timepoint combination (proportional)}
+mutate(h2,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  select(-`1`,-`3`,-`5`) %>% pivot_longer(-patient) %>% add_clinical() %>% 
+  group_by(clinical,name) %>% summarize(
+    serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+    value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,color=clinical))+
+  geom_point(aes(pch=name),position=position_dodge(width=0.3),size=2.5)+
+  geom_errorbar(aes(ymin=value-serr,ymax=value+serr,group=name),width=0.2,lwd=1,
+                position=position_dodge(width=0.3))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(axis.text.x=element_blank())+geom_hline(yintercept=0)
+```
+
+```{r rainfall of div change (raw)}
+mutate(h2,`3-1`=(`3`-`1`),`5-1`=(`5`-`1`),`5-3`=(`5`-`3`)) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+##### Cell type diversity
+
+```{r overall diversity root 1.2,warning=F}
+h1.2 <- rep4$data[(!(names(rep4$data) %in% c('20-5','23-1')))&
+                    (rep4$meta$timepoint %in% c('1','3','5'))] %>% 
+  map_dfr(function(x){
+    map_dfr(unique(na.omit(dat$cluster_fine)),function(y){
+        div <- filter(x,cluster_fine==y) %>% 
+            repDiversity('inv.simp') %>% as.numeric()
+        data.frame('patient'=x$patient[1],'timepoint'=x$timepoint[1],
+                   'type'=y,'value'=log10(div))
+    })
+}) %>% add_clinical() %>% 
+  mutate(value=if_else(is.infinite(value),NA_real_,value))
+```
+
+this data is already log10(inv.simp)
+
+```{r cell type diversity overall}
+group_by(h1.2,clinical,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% 
+  prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~type,nrow=2)+theme(axis.text.x=element_blank())
+```
+
+```{r cell type diversity timepoints}
+filter(h1.2,type %!in% c('Dead','GDT','MAIT','Low Counts')) %>% 
+  group_by(clinical,timepoint,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~type,nrow=3)+theme(axis.text.x=element_blank())
+```
+
+```{r cell type diversity change}
+h1.3 <- h1.2 %>% pivot_wider(id_cols=c(patient,type),
+                     names_from=timepoint,values_from=value) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`))
+library(gridExtra)
+map(c('CD8 Effector Memory','CD8 TEMRA','CD8 Central Memory',
+      'CD8 Exhausted','Cycling','Th1','Th2','CD4 Early Activated','Treg'),
+    function(y){
+  filter(h1.3,type==y) %>% 
+    ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+    prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+    labs(y='Change in diversity',x='Patient',title=y)
+})
+```
+
+#### TM diversity
+
+##### raw diversity
+
+```{r TM diversity root 1}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))] %>% 
+  map(~filter(.x,!is.na(expTil)))
+h2 <- map_dbl(h1,nrow) %T>% print()
+h1 <- h1[h2>=50] #can set min clones cutoff
+h1 %<>% repSample('downsample',.prob=T) %>% repDiversity('inv.simp') %>% mutate(nclones=h2[Sample]) %>% 
+  separate(Sample,c('patient','timepoint')) %>% add_clinical()
+```
+
+```{r TM overall}
+filter(h1,timepoint %in% c('1','3','5','h')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()
+mutate(h1,Value=1/Value) %>% group_by(clinical,timepoint) %>%
+  plotErrorbar1(plot=T)+facet_wrap(~timepoint)+
+  theme(axis.text.x=element_blank())+ylab('Clonality')
+# this one is clonality but the later ones aren't
+```
+
+```{r TM pretreatment}
+filter(h1,timepoint %in% c('1','h')) %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r TM posttreatment}
+filter(h1,timepoint %in% c('3','5','h')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r TM timepoint 5}
+filter(h1,timepoint %in% c('5','h')) %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r TM split timepoint box}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()+facet_wrap(~timepoint)+
+  theme(axis.text.x=element_blank())
+```
+
+```{r pbmc TM split timepoint line+errorbars}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value)) %>% #weird geom mean geom sterr stuff here
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),width=0.1,
+                position=position_dodge(width=0.15),lwd=1)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r TM split timepoint line+errorbars (3-5 combined)}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value),timepoint=if_else(timepoint=='1','pre','post') %>% 
+           factor(levels=c('pre','post'))) %>%
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),width=0.1,
+                position=position_dodge(width=0.15),lwd=1)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+##### Change in diversity
+
+```{r TM diversity root 2}
+h1 <- filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value)) %>% #Values already log scaled
+  pivot_wider(id_cols=patient,names_from=timepoint,values_from=Value)
+```
+
+```{r TM 1-3-5 line plot (proportional)}
+na.omit(h1) %>% mutate(`3`=(`3`-`1`)/`1`,`5`=(`5`-`1`)/`1`,`1`=0) %>% 
+  pivot_longer(-patient) %>% add_clinical() %>% ggplot(aes(name,value))+
+  geom_line(aes(group=patient,color=clinical),lwd=1.2)+
+  labs(y='Proportional change',x='Timepoint',title='Diversity over time')+
+  theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r TM rainfall of div change (proportional)}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+```{r TM errobars of div change (proportional)}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  group_by(clinical) %>% summarize(Value=mean(`5-1`),serr=sd(`5-1`)/sqrt(n())) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical)) %>% prism()+geom_col()+
+  geom_errorbar(aes(ymin=Value-serr,ymax=Value+serr),width=0.2,lwd=1)
+```
+
+```{r TM errorbars of div change for each timepoint combination (proportional)}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  select(-`1`,-`3`,-`5`) %>% pivot_longer(-patient) %>% add_clinical() %>% 
+  group_by(clinical,name) %>% summarize(
+    serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+    value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,color=clinical))+
+  geom_point(aes(pch=name),position=position_dodge(width=0.3),size=2.5)+
+  geom_errorbar(aes(ymin=value-serr,ymax=value+serr,group=name),width=0.2,lwd=1,
+                position=position_dodge(width=0.3))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(axis.text.x=element_blank())+geom_hline(yintercept=0)
+```
+
+```{r TM rainfall of div change (raw)}
+mutate(h1,`3-1`=(`3`-`1`),`5-1`=(`5`-`1`),`5-3`=(`5`-`3`)) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+##### cell type diversity
+
+```{r TM diversity root 1.2,warning=F}
+h1.2 <- rep4$data[(rep4$meta$timepoint %in% c('1','3','5'))&
+                    (interaction(rep4$meta$patient,rep4$meta$timepoint) %!in% c('20.5','23.1'))] %>% 
+  map(~filter(.x,!is.na(Clones))) %>% 
+  map_dfr(function(x){
+    map_dfr(unique(na.omit(dat$cluster_fine)),function(y){
+        div <- filter(x,cluster_fine==y) %>% 
+            repDiversity('inv.simp') %>% as.numeric()
+        data.frame('patient'=x$patient[1],'timepoint'=x$timepoint[1],
+                   'type'=y,'value'=log10(div),
+                   nclone=nrow(filter(x,cluster_fine==y)))
+    })
+}) %>% add_clinical() %>% 
+  mutate(value=if_else(is.infinite(value),NA_real_,value))
+```
+
+this data is already log10(inv.simp)
+
+```{r TM cell type diversity overall}
+group_by(h1.2,clinical,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% 
+  prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~type,nrow=2)+theme(axis.text.x=element_blank())
+```
+
+```{r TM cell type diversity timepoints}
+filter(h1.2,type %!in% c('Dead','GDT','MAIT','Low Counts')) %>% 
+  group_by(clinical,timepoint,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~type,nrow=3)+theme(axis.text.x=element_blank())
+```
+
+```{r TM cell type diversity change}
+h1.3 <- h1.2 %>% pivot_wider(id_cols=c(patient,type),
+                     names_from=timepoint,values_from=value) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`))
+map(c('CD8 Effector Memory','CD8 TEMRA','CD8 Central Memory',
+      'CD8 Exhausted','Cycling','Th1','Th2','CD4 Early Activated','Treg'),
+    function(y){
+  filter(h1.3,type==y) %>% 
+    ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+    prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+    labs(y='Change in diversity',x='Patient',title=y)
+})
+```
+
+#### BM diversity
+
+##### raw diversity
+
+```{r BM diversity root 1,cache=T}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))] %>% 
+  map(~mutate(.x,Clones=expTil) %>% filter(!is.na(expTil)))
+h2 <- map_dbl(h1,nrow) %T>% print()
+h1 <- h1[h2>=10] #can set min clones cutoff
+h1 %<>% repDiversity('inv.simp') %>% mutate(nclones=h2[Sample]) %>% 
+  separate(Sample,c('patient','timepoint')) %>% add_clinical()
+```
+
+```{r BM overall,eval=F}
+filter(h1,timepoint %in% c('1','3','5','h')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r BM pretreatment}
+filter(h1,timepoint %in% c('1','h')) %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r BM posttreatment}
+filter(h1,timepoint %in% c('3','5','h')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r BM timepoint 5,eval=F}
+filter(h1,timepoint %in% c('5','h')) %>% plotBoxplot() %>% prism()+scale_y_log10()
+```
+
+```{r BM split timepoint box,eval=F}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  plotBoxplot() %>% prism()+scale_y_log10()+facet_wrap(~timepoint)+
+  theme(axis.text.x=element_blank())
+```
+
+```{r pbmc BM split timepoint line+errorbars,eval=F}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value)) %>% #weird geom mean geom sterr stuff here
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),width=0.1,
+                position=position_dodge(width=0.15),lwd=1)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r BM split timepoint line+errorbars (3-5 combined)}
+filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value),timepoint=if_else(timepoint=='1','pre','post') %>% 
+           factor(levels=c('pre','post'))) %>%
+  group_by(clinical,timepoint) %>%
+  summarize(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>% ungroup() %>%
+  ggplot(aes(timepoint,10**Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymin=10**(Value-serr),ymax=10**(Value+serr)),width=0.1,
+                position=position_dodge(width=0.15),lwd=1)+
+  scale_y_log10()+theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+##### Change in diversity
+
+```{r BM diversity root 2,dependson='BM diversity root 1'}
+h1 <- filter(h1,timepoint %in% c('1','3','5')) %>% 
+  mutate(Value=log10(Value)) %>% #Values already log scaled
+  pivot_wider(id_cols=patient,names_from=timepoint,values_from=Value)
+```
+
+```{r BM 1-3-5 line plot (proportional),eval=F}
+na.omit(h1) %>% mutate(`3`=(`3`-`1`)/`1`,`5`=(`5`-`1`)/`1`,`1`=0) %>% 
+  pivot_longer(-patient) %>% add_clinical() %>% ggplot(aes(name,value))+
+  geom_line(aes(group=patient,color=clinical),lwd=1.2)+
+  labs(y='Proportional change',x='Timepoint',title='Diversity over time')+
+  theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r BM rainfall of div change (proportional),eval=F}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+```{r BM errobars of div change (proportional)}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  group_by(clinical) %>% summarize(Value=mean(`5-1`),serr=sd(`5-1`)/sqrt(n())) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical)) %>% prism()+geom_col()+
+  geom_errorbar(aes(ymin=Value-serr,ymax=Value+serr),width=0.2,lwd=1)
+```
+
+```{r BM errorbars of div change for each timepoint combination (proportional),eval=F}
+mutate(h1,`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  select(-`1`,-`3`,-`5`) %>% pivot_longer(-patient) %>% add_clinical() %>% 
+  group_by(clinical,name) %>% summarize(
+    serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+    value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,color=clinical))+
+  geom_point(aes(pch=name),position=position_dodge(width=0.3),size=2.5)+
+  geom_errorbar(aes(ymin=value-serr,ymax=value+serr,group=name),width=0.2,lwd=1,
+                position=position_dodge(width=0.3))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(axis.text.x=element_blank())+geom_hline(yintercept=0)
+```
+
+```{r BM rainfall of div change (raw),eval=F}
+mutate(h1,`3-1`=(`3`-`1`),`5-1`=(`5`-`1`),`5-3`=(`5`-`3`)) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+  prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+  labs(y='Change in diversity',x='Patient')
+```
+
+##### cell type diversity
+
+```{r BM diversity root 1.2,warning=F}
+h1.2 <- rep4$data[(rep4$meta$timepoint %in% c('1','3','5'))&
+                    (interaction(rep4$meta$patient,rep4$meta$timepoint) 
+                     %!in% c('20.5','23.1'))] %>% 
+  map(~mutate(.x,Clones=expTil) %>% filter(!is.na(Clones))) %>% 
+  map_dfr(function(x){
+    map_dfr(unique(na.omit(dat$cluster_fine)),function(y){
+        div <- filter(x,cluster_fine==y) %>% 
+            repDiversity('inv.simp') %>% as.numeric()
+        data.frame('patient'=x$patient[1],'timepoint'=x$timepoint[1],
+                   'type'=y,'value'=log10(div),
+                   nclone=nrow(filter(x,cluster_fine==y)))
+    })
+}) %>% add_clinical() %>% 
+  mutate(value=if_else(is.infinite(value),NA_real_,value))
+```
+
+this data is already log10(inv.simp)
+
+```{r BM cell type diversity overall}
+group_by(h1.2,clinical,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% 
+  prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~type,nrow=2)+theme(axis.text.x=element_blank())
+```
+
+```{r BM cell type diversity timepoints,eval=F}
+filter(h1.2,type %!in% c('Dead','GDT','MAIT','Low Counts')) %>% 
+  group_by(clinical,timepoint,type) %>% 
+  summarize(serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+            value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~type,nrow=3)+theme(axis.text.x=element_blank())
+```
+
+```{r BM cell type diversity change}
+h1.3 <- h1.2 %>% pivot_wider(id_cols=c(patient,type),
+                     names_from=timepoint,values_from=value) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical() %>% filter(!is.na(`5-1`))
+map(c('CD8 Effector Memory','CD8 TEMRA','CD8 Central Memory',
+      'CD8 Exhausted','Cycling','Th1','Th2','CD4 Early Activated','Treg'),
+    function(y){
+  filter(h1.3,type==y) %>% 
+    ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical)) %>% 
+    prism()+geom_col()+theme(axis.text.x=element_text(angle=90))+
+    labs(y='Change in diversity',x='Patient',title=y)
+})
+```
+
+#### rarefaction
+
+```{r individual curves,cache=T}
+clone_prop <- function(df,n,margin='seqs'){
+  if(margin=='seqs') sum(filter(df,Clones>=n)$Proportion)
+  else if(margin=='clones') mean(df$Clones>=n)
+  else stop('invalid margin')
+}
+# generates raref curves of clonotype size for list of imm_data
+clone_curves <- function(dfs,margin='seqs',max1=20){
+  clone_curve <- function(df,margin='seqs',max1=20){
+    map_dfr(1:max1,function(i){
+      data.frame('n'=i,'prop'=clone_prop(df=df,n=i,margin=margin))
+    })
+  }
+  if(any(class(dfs)=='data.frame')){
+    out <- clone_curve(df=dfs,margin=margin,max1=max1) %>% 
+      mutate(patient='?',clinical='?',timepoint='?')
+  }
+  else if(any(class(dfs)=='list')){
+    out <- map_dfr(dfs,.id='name',~clone_curve(df=.x,margin=margin,max1=max1)) %>% 
+      separate(name,c('patient','timepoint')) %>% add_clinical()
+  }
+  label_df <- filter(out,n==2) %>% select(patient,timepoint,clinical,prop)
+  ggplot(out,aes(n,prop,color=clinical))+
+    geom_line(aes(group=interaction(patient,timepoint)))+
+    scale_x_log10()+ylim(c(0,1))+
+    labs(y=paste('Proportion of',margin),x='Size threshold')+
+    ggrepel::geom_label_repel(data=label_df,aes(2,prop,color=clinical,
+                                           label=interaction(patient,timepoint)))
+}
+clone_curves(rep4$data,'seqs',20)
+```
+
+```{r clinical curves,dependson="individual curves"}
+# raref curves with error bars for summary of clinical types
+clone_curve2 <- function(dfs,margin='seqs',max1=20){
+  clone_curve <- function(df,margin='seqs',max1=20){
+    map_dfr(1:max1,function(i){
+      data.frame('n'=i,'prop'=clone_prop(df=df,n=i,margin=margin))
+    })
+  }
+  if(any(class(dfs)=='data.frame')){
+    out <- clone_curve(df=dfs,margin=margin,max1=max1) %>% 
+      mutate(patient='?',clinical='?',timepoint='?')
+  }
+  else if(any(class(dfs)=='list')){
+    dfs %<>% map(~mutate(.x,Proportion=proportions(Clones)))
+    out <- map_dfr(dfs,.id='name',~clone_curve(df=.x,margin=margin,max1=max1)) %>% 
+      separate(name,c('patient','timepoint')) %>% add_clinical()
+  }
+  # we need to uhh
+  add_count(out,clinical,n,name='count') %>% 
+    group_by(clinical,n) %>%
+    summarize(serr=sd(prop)/sqrt(count[1]),prop=mean(prop)) %>% ungroup() %>%
+    ggplot(aes(n,prop,color=clinical))+
+    geom_point(size=1.25,position=position_dodge(width=0.2))+
+    geom_line(aes(group=clinical),position=position_dodge(width=0.2),lwd=0.75)+
+    geom_errorbar(aes(ymin=prop-serr,ymax=prop+serr),width=0.2,
+                  position=position_dodge(width=0.2))+
+    ylim(c(0,1))+
+    labs(y=paste('Proportion of',margin),x='Size threshold')
+}
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','3','5','h'))&
+                         (!(names(rep4$data) %in% c('20-5','23-1')))])+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Clonotype size rarefaction')
+# downsampled
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','3','5','h'))&
+                         (!(names(rep4$data) %in% c('20-5','23-1','21-1')))] %>% #removing 21-1 is arbitrary and inconsistent, but raises from 115 to 459
+               repSample('downsample',.prob=T))+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)
+```
+
+```{r clinical curves timepoint, dependson="clinical curves"}
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+                         (!(names(rep4$data) %in% c('20-5','23-1')))])+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Pretreatment')
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('3','5','h'))&
+                         (!(names(rep4$data) %in% c('20-5','23-1')))])+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Posttreatment')
+# downsampled
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('1','h'))&
+     (!(names(rep4$data) %in% c('23-1','21-1')))] %>%
+       repSample('downsample',.prob=T))+ #removed 21-1 because drops downsample to 115 seqs
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Pretreatment')
+clone_curve2(rep4$data[(rep4$meta$timepoint %in% c('3','5','h'))&
+                         (!(names(rep4$data) %in% c('20-5')))] %>% repSample('downsample',.prob=T))+
+  ggprism::theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+labs(title='Posttreatment')
+```
+
+```{r TM rarefaction}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))] %>% 
+  map(~filter(.x,!is.na(expTil)))
+h2 <- map_dbl(h1,nrow)
+h3 <- h1[h2>=50] # min nclones
+clone_curve2(h3, max1=100)+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+ggtitle('Tumor matching clonotype size')
+# downsampled
+h3 <- h1[h2>=50]
+clone_curve2(repSample(h3,'downsample',.prob=T), max1=20)+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+ggtitle('Tumor matching clonotype size')
+h3 <- h1[h2>=100]
+clone_curve2(repSample(h3,'downsample',.prob=T), max1=60)+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+ggtitle('Tumor matching clonotype size')
+```
+```{r BM rarefaction}
+h3 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))] %>% 
+  map(~mutate(.x,Clones=expTil) %>% filter(!is.na(expTil)))
+h2 <- map_dbl(h3,nrow)
+h3 <- h3[h2>=20] # filter at least that many clones
+map(h3,~mutate(.x,Proportion=proportions(Clones))) %>% clone_curve2(max1=100)+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+ggtitle('Blood matching clonotype size')
+```
+
+```{r TIL raref}
+# work in progress
+h3 <- rep4$data[(rep4$meta$timepoint %in% c(0))]
+h2 <- map_dbl(h3,~sum(.x$Clones)) #min 429 seqs
+# h3 <- h3[h2>=1000]
+map(h3,~mutate(.x,Proportion=proportions(Clones))) %>%
+  repSample('downsample',.prob=T) %>% 
+  clone_curve2(max1=25)+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(legend.position='none')+ggtitle('Tumoral clonotype size')
+```
+
+#### spectratyping
+
+```{r VJ gene usage,eval=F}
+circosSpectra <- function(mask1,ab){
+  # mask for which of repdata and whether a or b
+  require(circlize)
+  vj <- map_dfr(rep4$data[mask1],~.x) %>% 
+    select(Proportion,J.name,V.name) %>% 
+    filter(str_starts(V.name,paste0('TR',toupper(ab),'V')),
+           str_starts(J.name,paste0('TR',toupper(ab),'J'))) %>% 
+    na.omit() %>% group_by(J.name,V.name) %>% 
+    summarise(total=sum(Proportion))
+  temp1 <- vj %>% group_by(V.name) %>% summarise(total=sum(total))
+  vj$V.name[vj$V.name %in% temp1$V.name[temp1$total<(sum(temp1$total)/100)]] <- paste0('TR',toupper(ab),'V-other')
+  temp1 <- vj %>% group_by(J.name) %>% summarise(total=sum(total))
+  vj$J.name[vj$J.name %in% temp1$J.name[temp1$total<(sum(temp1$total)/100)]] <- paste0('TR',toupper(ab),'J-other')
+  circos.clear()
+  circos.par(gap.degree=0,
+             gap.after=c(rep(0.2,length(unique(vj$J.name))-1),5,
+                         rep(0.2,length(unique(vj$V.name))-1),5))
+  colorFunct <- colorRamp2(
+    c(max(vj$total),median(vj$total),min(vj$total)) %>% rev(),
+    RColorBrewer::brewer.pal(3,'YlOrRd'),transparency=0.4)
+  chordDiagram(vj,annotationTrack='grid',
+               preAllocateTracks=1,
+               col=colorFunct,link.sort=T)
+  circos.trackPlotRegion(track.index = 1,panel.fun = function(x, y) {
+    sector.name = get.cell.meta.data("sector.index")
+    circos.text(CELL_META$xcenter,CELL_META$ylim[1],CELL_META$sector.index,
+                facing = "clockwise", niceFacing=T,
+                cex=0.7,track.index=1,adj=c(0,0.5))
+    # circos.axis(h = "top", labels.cex = 0.5, major.tick.length = 0.1,
+    #             sector.index=CELL_META$sector.index, track.index = 2)
+  }, bg.border = NA)
+}
+
+# pretreatment
+set.seed(13)
+circosSpectra((rep4$meta$clinical=='Lynch-like responder')&(rep4$meta$timepoint=='1')&(rep4$meta$patient!='23'),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonlynch-like responder')&(rep4$meta$timepoint=='1')),4)),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonresponder')&(rep4$meta$timepoint=='1')),4)),'b')
+# posttreatment
+set.seed(13)
+circosSpectra((rep4$meta$clinical=='Lynch-like responder')&(rep4$meta$timepoint %in% c(3,5))&(rep4$meta$patient!='23'),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonlynch-like responder')&(rep4$meta$timepoint %in% c(3,5))),7)),'b')
+circosSpectra((1:length(rep4$data)) %in% (sample(which((rep4$meta$clinical=='Nonresponder')&(rep4$meta$timepoint %in% c(3,5))),7)),'b')
+```
+
+```{r VJ gene diversity clones}
+h1 <- map_dbl(rep4$data[(rep4$meta$timepoint %in% c('1','3','5'))&
+                (names(rep4$data) %!in% c('23-1','20-5'))],
+              function(x){
+  select(x,V.name,J.name,Clones) %>% na.omit() %>% 
+    mutate(temp=interaction(V.name,J.name)) %>% 
+    group_by(temp) %>% summarize(n=n()) %>% 
+    .$n %>% vegan::diversity(index='simpson') %>% 
+    subtract(1,.)
+}) %>% as.data.frame() %>% rownames_to_column() %>% rename(value='.') %>%
+  separate(rowname,c('patient','timepoint'),'-') %>% add_clinical()
+```
+
+```{r vj gene diversity seqs}
+# with counting clonotype size
+limitSize <- 500
+h2 <- 'vj' #v.j, j, or v gene diversity
+h3 <- c('1','h') #timepoint filter
+h1 <- filter(cella@contig_tbl,(!is.na(v_gene))&(!is.na(j_gene)),
+             timepoint %in% h3) %>% 
+  select(patient,timepoint,v_gene,j_gene) %>% 
+  mutate(vj=interaction(v_gene,j_gene)) %>% 
+  group_split(patient,timepoint) %>% 
+  map_dbl(function(x){
+    if(nrow(x)<limitSize) NA_real_
+    else{
+      if(h2=='v') tab <- table(x$v_gene) %>% as.data.frame() %>% set_colnames(c('gene','freq'))
+      if(h2=='j') tab <- table(x$j_gene) %>% as.data.frame() %>% set_colnames(c('gene','freq'))
+      if(h2=='vj') tab <- table(x$vj) %>% as.data.frame() %>% set_colnames(c('gene','freq'))
+      vegan::diversity(tab$freq,index='simpson')
+    }
+  }) %>% data.frame('value'=.) %>% mutate(value=1-value)#this makes it clonality
+h1 <- filter(cella@contig_tbl,timepoint %in% h3) %>%
+  group_by(patient,timepoint) %>% group_keys() %>% 
+  cbind(h1) %>% add_clinical()
+plotErrorbar1(group_by(h1,clinical),'value',T,type=2)
+plotBoxplot(h1,'value')
+```
+
+
+### overlap
+
+#### similarity validation
+
+```{r TIL overlap timepoints}
+# til overlap timepoints
+repOverlap(rep4$data[rep4$meta$timepoint %in% c('0','7')],'jaccard') %>% 
+  vis('heatmap2')
+# maybe try and find corr between 0-7 similarity and 1-5 similarity or like yeah
+```
+
+the pre-post tils always strong cluster in overlap/jaccard/morisita
+26/9/3/12 consistent, 19 and 7 iffy (7 really low counts)
+
+```{r PBMC overlap timepoints}
+repOverlap(rep4$data[rep4$meta$timepoint %in% c('1','3','5')],'morisita') %>% 
+  vis('heatmap2')
+```
+
+morisita looks beautiful, all patients cluster really strongly some
+mixing with the low 20's in jaccard and overlap, but overall very strong
+
+```{r overall overlap}
+repOverlap(rep4$data,'overlap') %>% vis('heatmap2')
+```
+
+overlap is nearly perfect (just 3til and 3pbmc separate but still have
+an island of overlap out there), jaccard good but mixes some up,
+morisita segregates like all the til from nontil
+
+#### temporal pbmc overlap
+
+```{r temporal pbmc overlap,cache=T}
+with15 <- group_by(rep4$meta,patient) %>% 
+  summarize(a=if_else(all(c('1','5') %in% timepoint),patient[1],NA_character_)) %>%
+  na.omit() %>% .$patient
+map_dbl(with15,function(p){
+  repOverlap(list(rep4$data[[paste0(p,'-1')]],rep4$data[[paste0(p,'-5')]]),.method='jaccard',.col='aa')
+}) %>% set_names(with15) %>% 
+  as.data.frame() %>% rownames_to_column('patient') %>% add_clinical() %>% 
+  ggplot(aes(reorder(patient,desc(`.`)),`.`,fill=clinical))+geom_col()
+```
+
+yo jaccard ignores proportions/clones, just based off cdr3s
+
+```{r temporal pbmc overlap TM,dependson='temporal pbmc overlap'}
+map_dbl(with15,function(p){# this for TM
+  list(
+    rep4$data[[paste0(p,'-1')]] %>% filter(!is.na(expTil)),
+    rep4$data[[paste0(p,'-5')]] %>% filter(!is.na(expTil))
+  ) %>% repOverlap(.method='jaccard',.col='aa')
+}) %>% set_names(with15) %>% 
+  as.data.frame() %>% rownames_to_column('patient') %>% add_clinical() %>% 
+  ggplot(aes(reorder(patient,desc(`.`)),`.`,fill=clinical))+geom_col()
+```
+
+```{r temporal pbmc overlap cell types,dependson='temporal pbmc overlap'}
+h1 <- map_dfr(with15,function(p){
+  pre <- rep4$data[[paste0(p,'-1')]] %>% filter(!is.na(cluster_fine)) %>% 
+  group_split(cluster_fine)
+  post <- rep4$data[[paste0(p,'-5')]] %>% filter(!is.na(cluster_fine)) %>% 
+  group_split(cluster_fine)
+  names(pre) <- map_chr(pre,~.x$cluster_fine[1])
+  names(post) <- map_chr(post,~.x$cluster_fine[1])
+  map_dbl(unique(na.omit(dat$cluster_fine)),function(y){
+    # tryCatch(min(nrow(pre[[y]]),nrow(post[[y]])),
+    tryCatch(as.numeric(repOverlap(list(pre[[y]],post[[y]]),'jaccard')),
+             error=function(e) NA_real_)
+  }) %>% 
+    data.frame('patient'=p,'type'=unique(na.omit(dat$cluster_fine)),'value'=.)
+}) %>% add_clinical()
+filter(h1,type %in% c('CD8 Effector Memory','CD8 TEMRA','Th2','Treg')) %>%
+  plotBoxplot('value')+facet_wrap(~type,scales='free',nrow=2)+
+  ggrepel::geom_text_repel(aes(label=patient),max.overlaps=100)
+```
+
+Not really any dramatic differences after filtering out the cell types
+with very few cells Tregs have very low overlap in general, Th2 as well,
+whereas CD8s have much higher
+
+```{r temporal pbmc overlap cell types coarse,dependson='temporal pbmc overlap'}
+h1 <- map_dfr(with15,function(p){
+  pre <- rep4$data[[paste0(p,'-1')]] %>% filter(!is.na(cluster_coarse)) %>% 
+  group_split(cluster_coarse)
+  post <- rep4$data[[paste0(p,'-5')]] %>% filter(!is.na(cluster_coarse)) %>% 
+  group_split(cluster_coarse)
+  names(pre) <- map_chr(pre,~.x$cluster_coarse[1])
+  names(post) <- map_chr(post,~.x$cluster_coarse[1])
+  map_dbl(unique(na.omit(dat$cluster_coarse)),function(y){
+    # tryCatch(min(nrow(pre[[y]]),nrow(post[[y]])),
+    tryCatch(as.numeric(repOverlap(list(pre[[y]],post[[y]]),'jaccard')),
+             error=function(e) NA_real_)
+  }) %>% 
+    data.frame('patient'=p,'type'=unique(na.omit(dat$cluster_coarse)),'value'=.)
+}) %>% add_clinical()
+filter(h1,type %in% c('CD8 Naive','CD8 Activated','CD4 Naive',
+                      'CD4 Activated','Treg')) %>%
+  plotBoxplot('value')+facet_wrap(~type,scales='free',nrow=2)#+
+  # ggrepel::geom_text_repel(aes(label=patient),max.overlaps=100)+geom_hline(yintercept=20)
+```
+
+Once again, not really strong clinical diffs, maybe lynch higher CD8
+act? (which is surprising) and nlr higher CD4 act? then again this is
+peripheral so not sure what to expect Treg has comparable temporal
+overlap to naive populations - less large preserved clones?
+
+```{r temporal TM cell type overlap,dependson='temporal pbmc overlap'}
+h1 <- map_dfr(with15,function(p){
+  pre <- rep4$data[[paste0(p,'-1')]] %>% 
+    filter(!is.na(cluster_coarse),!is.na(expTil)) %>% 
+    group_split(cluster_coarse)
+  post <- rep4$data[[paste0(p,'-5')]] %>% 
+    filter(!is.na(cluster_coarse),!is.na(expTil)) %>% 
+    group_split(cluster_coarse)
+  names(pre) <- map_chr(pre,~.x$cluster_coarse[1])
+  names(post) <- map_chr(post,~.x$cluster_coarse[1])
+  map_dbl(unique(na.omit(dat$cluster_coarse)),function(y){
+    # tryCatch(min(nrow(pre[[y]]),nrow(post[[y]])),
+    tryCatch(as.numeric(repOverlap(list(pre[[y]],post[[y]]),'jaccard')),
+             error=function(e) NA_real_)
+  }) %>% 
+    data.frame('patient'=p,'type'=unique(na.omit(dat$cluster_coarse)),'value'=.)
+}) %>% add_clinical()
+filter(h1,type %in% c('CD8 Activated','CD4 Activated')) %>%
+  plotBoxplot('value')+facet_wrap(~type,scales='free')#+
+  # ggrepel::geom_text_repel(aes(label=patient),max.overlaps=100)+geom_hline(yintercept=20)
+```
+
+all really low counts, but CD8 Activated actually does look lower
+overlap in nlr though
+
+#### pbmc-til overlap
+
+```{r pbmc-til overlap by timepoint}
+h1 <- repOverlap(rep4$data,'jaccard') %>% as.data.frame() %>% rownames_to_column('temp') %>% pivot_longer(-temp) %>% separate(temp,c('p1','t1'),'-') %>% separate(name,c('p2','t2'),'-') %>% na.omit() %>% filter(p1==p2,t1 %in% c('0','7'),t2 %in% c('1','3','5'))
+
+ggplot(filter(h1,t1=='0'),aes(t2,value))+geom_boxplot(outlier.alpha=0)+geom_jitter(width=0.05,height=0)
+ggplot(filter(h1,t1=='0') %>% add_clinical('p1'),aes(t2,value,fill=clinical))+
+  geom_boxplot()
+```
+
+```{r pbmc-posttil overlap}
+ggplot(filter(h1,t1=='7'),aes(t2,value))+geom_boxplot(outlier.alpha=0)+geom_jitter(width=0.05,height=0)
+```
+
+looks like generally stronger 5-7 overlap (but small and not much for
+any other)
+
+```{r temporal change in pbmc-til overlap}
+# filter(h1,t1=='0',t2!='3') %>% pivot_wider(id_cols=p1,names_from=t2,values_from=value) %>% 
+#   na.omit() %>% mutate(value=`5`-`1`) %>% # this is only 5-1 diff
+#   add_clinical('p1') %>% 
+#   ggplot(aes(reorder(p1,desc(value)),value,fill=clinical))+geom_col()
+# proportional change, 23/20 outliers removed
+h2 <- filter(h1,t1=='0',t2!='3',!(p1 %in% c('23','20'))) %>%
+  pivot_wider(id_cols=p1,names_from=t2,values_from=value) %>% 
+  na.omit() %>% mutate(value=(`5`-`1`)/`1`) %>% # this is only 5-1 diff
+  add_clinical('p1')
+ggplot(h2,aes(reorder(p1,desc(value)),value,fill=clinical))+geom_col()
+# errorbar version
+group_by(h2,clinical) %>% 
+  summarize(serr=sd(value)/sqrt(n()),value=mean(value)) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  geom_hline(yintercept=0,lwd=1)
+```
+
+the questionable data shows enrichment towards both extremes with
+outliers removed though, it looks like just increase in TM overlap for
+NLR
+
+```{r pbmc-til overlap change all contrasts}
+filter(h1,!(p1 %in% c('20','23'))) %>% 
+  pivot_wider(names_from=t2,values_from=value) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  select(-`1`,-`3`,-`5`,-t1,-p2) %>% pivot_longer(-p1) %>% add_clinical('p1') %>% 
+  group_by(clinical,name) %>% summarize(
+    serr=sd(value,na.rm=T)/sqrt(sum(!is.na(value))),
+    value=mean(value,na.rm=T)) %>% 
+  ggplot(aes(clinical,value,color=clinical))+
+  geom_point(aes(pch=name),position=position_dodge(width=0.3),size=2.5)+
+  geom_errorbar(aes(ymin=value-serr,ymax=value+serr,group=name),width=0.2,lwd=1,
+                position=position_dodge(width=0.3))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  theme(axis.text.x=element_blank())+geom_hline(yintercept=0)
+```
+
+```{r temporal change in til and posttil overlap}
+rbind(
+  filter(h1,p1 %in% unique(h1$p1)[map_lgl(unique(h1$p1),~all(c('1','5') %in% filter(h1,p1==.x)$t2))],t1=='0') %>% pivot_wider(names_from=t2,values_from=value) %>% mutate(value=`5`-`1`),
+  filter(h1,p1 %in% unique(h1$p1)[map_lgl(unique(h1$p1),~all(c('1','5') %in% filter(h1,p1==.x)$t2))],t1=='7') %>% pivot_wider(names_from=t2,values_from=value) %>% mutate(value=`5`-`1`)) %>% 
+  ggplot(aes(t1,value,fill=t1))+geom_boxplot(outlier.alpha=0)+
+  geom_jitter(width=0.05,height=0)
+```
+
+it kinda looked like something was there, but looks inconclusive
+
+#### Clonotype cell types
+
+```{r cell types of clonotypes}
+nfilter <- 3
+h1 <- add_clinical(cella@contig_tbl) %>% filter(clinical!='Healthy') %>% 
+  group_split(patient,timepoint,chain,cdr3)
+h1 <- h1[map_dbl(h1,~nrow(.x))>=nfilter]
+h1 <- map_chr(h1,function(x){
+  y <- na.omit(x$cluster_coarse) %>% as.character()
+  if(length(y)<nfilter) NA_character_
+  else{
+    table1 <- table(y)
+    if(length(table1)==1){
+      sample(names(which(table1==max(table1))),1) %>% 
+        paste0('-')
+    } else{
+      primary <- sample(names(which(table1==max(table1))),1)
+      table1 <- table(y,exclude=primary)
+      secondary <- sample(names(which(table1==max(table1))),1)
+      paste0(primary,'-',secondary)
+    }
+  }
+}) %>% na.omit() %>% 
+  data.frame('temp'=.) %>% 
+  separate(temp,c('primary','secondary'),'-') %>% 
+  filter(primary!='Dead') %>% 
+  mutate(secondary=case_when(secondary==''~'None',secondary=='Dead'~'None',T~secondary))
+table(h1) %>% t() %>% as.data.frame.matrix() %>% 
+  mutate(across(.fns=proportions)) %>% 
+  rownames_to_column('secondary') %>% pivot_longer(-secondary) %>%
+  rename(primary=name) %>% 
+  # this is to replace the ones with cd8 naive as primary
+  # mutate(secondary2=if_else(primary=='CD8 Naive','CD8 Naive',secondary),
+  #        primary2=if_else(primary=='CD8 Naive',secondary,primary)) %>% 
+  # filter(primary!='CD8 Naive') %>% 
+  ggplot(aes(primary,value,fill=secondary))+geom_col(position='stack')+
+  scale_x_discrete(breaks=names(table(h1$primary)),
+                   labels=paste0(names(table(h1$primary)),'\n(',as.character(table(h1$primary)),')'))+
+  xlab('Primary (# of cells)')+theme_minimal()
+```
+
+*this is erroring right now for me? 08.19* don't have scaling worked out
+yet, and this is overall but treg lot of overlap cd4act cd8, cd8exh-act
+strong, cd4 act-exh?
+
+```{r cell types of clonotypes heatmap, dependson=-1}
+  # lot more treg and cd4 act in nlr, low treg in l, 
+table(h1) %>% t() %>% as.data.frame.matrix() %>% 
+  mutate(across(.fns=proportions)) %>%
+  pheatmap::pheatmap(
+    cluster_rows=F,cluster_cols=F,
+    breaks=c(seq(0,0.4,length.out=100),0.6),
+    color=colorRampPalette(RColorBrewer::brewer.pal(7,'Purples'))(100))
+```
+
+```{r number of cell types per clonotype}
+# the above but lazy edition
+cella@contig_tbl %>% filter(chain=='TRB') %>% 
+  group_by(patient,timepoint,cdr3) %>%
+  summarize(ntypes=if_else(length(na.omit(cluster_coarse))==0,NA_integer_,
+                           length(unique(na.omit(cluster_coarse))))) %>% 
+  na.omit() %>% add_clinical() %>% 
+  mutate(ntypes=factor(ntypes)) %>% 
+  group_by(patient,timepoint,clinical,ntypes) %>% 
+  summarize(count=length(ntypes)) %>% ungroup() %>% 
+  group_by(patient,timepoint,clinical) %>% 
+  summarize(prop=proportions(count),ntypes=ntypes) %>% ungroup() %>% 
+  #this line to just compare 2 and >2 number of matching types
+  filter(ntypes!='1') %>% mutate(ntypes=if_else(ntypes=='2','2','>2')) %>% 
+  ggplot(aes(ntypes,prop))+geom_boxplot(aes(fill=clinical))+scale_y_sqrt()
+```
+
+not much clinical diff, maybe a bit more single in nr more 2+ in nr,
+more 2 in nlr/maybe l; the high nr outliers are 17
+
+#### TEMRA distinctness
+
+```{r count of temra clones}
+names(rep4$data)[(rep4$meta$timepoint %in% c(1,3,5,'h'))&
+    (!names(rep4$data) %in% c('20-5','23-1'))] %>% 
+  map(function(n){
+    h1 <- rep4$data[[n]] %>% filter(!is.na(cluster_fine)) %>% 
+      mutate(temp=if_else(cluster_fine=='CD8 TEMRA','CD8 TEMRA','Other')) %>% 
+      group_split(temp)
+    names(h1) <- map_chr(h1,~.x$temp[1])
+    map(h1,~nrow(.x))
+  })
+```
+
+```{r temra v all split by tp/p}
+limitSize <- 5
+filter(cella@cell_tbl,!is.na(cluster_fine)) %>% 
+  group_split(patient,timepoint) %>% 
+  map_dbl(function(x){
+    if((sum(x$cluster_fine=='CD8 TEMRA')<limitSize)|(sum(x$cluster_fine!='CD8 TEMRA')<limitSize)) NA_real_
+    else{
+      h1 <- x$cdr3[x$cluster_fine=='CD8 TEMRA'] %>% 
+        table() %>% as.data.frame() %>% 
+        set_colnames(c('cdr3','temra'))
+      h2 <- x$cdr3[x$cluster_fine!='CD8 TEMRA'] %>% 
+        table() %>% as.data.frame() %>% 
+        set_colnames(c('cdr3','other'))
+      full_join(h1,h2,by='cdr3') %>% 
+        replace_na(list('temra'=0,'other'=0)) %>% 
+        select(-cdr3) %>% t() %>% 
+        # vegan::vegdist(method='morisita',binary=F)
+        vegan::vegdist(method='jaccard',binary=T)
+    }
+  }) %>% as.data.frame() %>% transmute(value=1-`.`) %>% 
+  #output is dissimilarity (1 is no overlap), this converts output to similarity
+  cbind(filter(cella@cell_tbl,!is.na(cluster_fine)) %>% 
+          group_by(patient,timepoint) %>% group_keys()) %>% 
+  add_clinical() %>% na.omit() %>% 
+  # plotBoxplot('value')
+  group_by(clinical) %>%
+  summarize(avg=median(value),err=sd(value)/sqrt(length(value))) %>%
+  ggplot(aes(clinical,avg,fill=clinical,color=clinical)) %>% prism()+geom_col()+
+  geom_errorbar(aes(ymax=err+avg,ymin=avg-err),width=0.2,lwd=1)
+```
+
+```{r temra v all types}
+limitSize <- 5 #minimum n_cdr3 in each group to run overlap
+fineTypes <- unique(cella@cell_tbl$cluster_fine)
+fineTypes <- fineTypes[!is.na(fineTypes)&(fineTypes!='CD8 TEMRA')]
+h1 <- filter(cella@cell_tbl,!is.na(cluster_fine),!(is.na(cdr3))) %>% 
+  group_split(patient,timepoint) %>% 
+  map_dfr(function(x){
+    map_dbl(fineTypes,function(type2){
+      if((sum(x$cluster_fine=='CD8 TEMRA')<limitSize)|
+         (sum(x$cluster_fine==type2)<limitSize)) NA_real_
+      else{
+        h1 <- x$cdr3[x$cluster_fine=='CD8 TEMRA'] %>% 
+          table() %>% as.data.frame() %>% 
+          set_colnames(c('cdr3','temra'))
+        h2 <- x$cdr3[x$cluster_fine==type2] %>% 
+          table() %>% as.data.frame() %>% 
+          set_colnames(c('cdr3','other'))
+        full_join(h1,h2,by='cdr3') %>% 
+          replace_na(list('temra'=0,'other'=0)) %>% 
+          select(-cdr3) %>% t() %>% 
+          vegan::vegdist(method='jaccard',binary=T)
+      }
+    }) %>% matrix(nrow=1) %>% subtract(e1=1,e2=.) %>% 
+      as.data.frame() %>% set_names(fineTypes) %>% 
+      mutate(patient=x$patient[1],timepoint=x$timepoint[1])
+  }) %>% add_clinical()
+pivot_longer(h1,-c(patient,clinical,timepoint),
+             names_to='type',values_to='similarity') %>% 
+  ggplot(aes(y=similarity,fill=clinical))+geom_boxplot()+
+  facet_wrap(~type,scales='free')
+pivot_longer(h1,-c(patient,clinical,timepoint),
+             names_to='type',values_to='similarity') %>% 
+  filter(type %in% c('CD8 Effector Memory','Cycling','Th1','Th2','Treg')) %>% 
+  group_by(clinical,type) %>%
+  summarize(avg=mean(similarity,na.rm=T),
+            err=sd(similarity,na.rm=T)/sqrt(length(na.omit(similarity)))) %>%
+  ggplot(aes(clinical,avg,fill=clinical,color=clinical))+
+  geom_col(position=position_dodge(width=1))+
+  geom_errorbar(aes(ymax=err+avg,ymin=avg-err),
+                width=0.2,lwd=0.8,position=position_dodge(width=1))+
+  facet_wrap(vars(type),scales='free')+
+  ylab('Jaccard similarity')+theme_prism()+
+  theme(axis.text.x=element_blank())+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)
+```
+
+still not entirely sure about the mechanics of vegdist could still be a
+size effect of the temra, haven't done downsampling also mean or median
+for the column version?
+
+### Cell counts
+
+#### Main
+
+```{r overall cell counts}
+# fine boxplot
+table(dat$cluster_fine,dat$clinical,dat$patient) %>% 
+  as.data.frame() %>% 
+  set_names(c('type','clinical','patient','freq')) %>% 
+  filter(freq>0) %>% group_split(patient,clinical) %>% 
+  map_dfr(~mutate(.x,prop=proportions(freq))) %>% 
+  plotBoxplot('prop') %>% prism()+facet_wrap(vars(type),scales='free')+
+  # ggrepel::geom_text_repel(aes(label=patient))+
+  theme(axis.text.x=element_blank())
+# coarse errorbars
+h1 <- filter(dat,cluster_coarse!='Junk') %>%  
+  mutate(cluster_coarse=factor(cluster_coarse)) %>% 
+  group_split(patient,timepoint) %>% map_dfr(function(x){
+    table1 <- table(x$cluster_coarse) %>% proportions()
+    data.frame(
+      'patient'=x$patient[1],
+      'timepoint'=x$timepoint[1],
+      'type'=names(table1),
+      'prop'=as.numeric(table1)
+    )
+  }) %>% add_clinical %>% 
+  group_by(clinical,type) %>% 
+  summarize(serr=sd(prop)/sqrt(n()),value=mean(prop)) %>% 
+  mutate(type=factor(type,levels=c(
+    'CD4 Naive','CD4 Activated','CD8 Naive','CD8 Activated',
+    'MAIT','GDT','Cycling','CD8 Exhausted')))
+library(patchwork)
+p1 <- filter(h1,type %in% levels(type)[1:4]) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% prism()+
+  geom_col()+geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~type,nrow=1,strip.position='bottom')+
+  theme(axis.text.x=element_blank(),legend.position='none',
+        axis.ticks.x=element_blank(),axis.title.x=element_blank())
+p2 <- filter(h1,type %in% levels(type)[5:8]) %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% prism()+
+  geom_col()+geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~type,nrow=1,strip.position='bottom')+
+  theme(axis.text.x=element_blank(),legend.position='none',
+        axis.ticks.x=element_blank(),axis.title.x=element_blank())
+p1 / p2
+```
+
+```{r pretreatment cell counts}
+filter(dat,timepoint %in% c('1','h'),patient!='23',
+       (cluster_coarse %!in% c('Junk','Other'))| # add T Cells to get proportion of non T cells
+         (cluster_fine=='Hematopoetic Progenitors')) %>% 
+  select(cluster_fine,clinical,patient) %>% table() %>% 
+  as.data.frame() %>% 
+  set_names(c('type','clinical','patient','freq')) %>% 
+  filter(freq>0) %>% group_split(patient,clinical) %>% 
+  map_dfr(~mutate(.x,prop=proportions(freq))) %>% 
+  plotBoxplot('prop') %>% prism()+facet_wrap(vars(type),scales='free')+
+  # ggrepel::geom_text_repel(aes(label=patient))+
+  theme(axis.text.x=element_blank())
+```
+
+```{r pretreatment cell counts individual cluster}
+h1 <- table(dat$integrated_snn_res.1.3[h1],dat$clinical[h1],dat$patient[h1]) %>% 
+  as.data.frame() %>% 
+  set_names(c('type','clinical','patient','freq')) %>% 
+  filter(freq>0) %>% group_split(patient,clinical) %>% 
+  map_dfr(~mutate(.x,prop=proportions(freq)))
+plotBoxplot(h1,'prop')+facet_wrap(vars(type),scales='free')+
+  theme(axis.text.x=element_blank())
+```
+
+got some interesting ones, 25 is just 14, 15 strong 23/5, 23-1 is just 6
+cells, 21-1 is 200 cells specific clusts - 3 (l high - temra right),8
+(nlr lo - cd8 naive), 12 (nlr hi, cd4 activated ish, center top), 16
+(nlr hi - dead?), 18(nlr hi,l lo, cd4 naive),21 (nlr hi - cd4 early?),
+24 (l lo,cd8-4 transition), 29 (l lo - left gdt), ldat clusts - 4(nlr
+lo-cd14mono),9(nlr hi-cd16 mono),19(l lo-cdc),21(nlr hi-cd16nk.2),22(l
+lo-cd56 nk),26(nlr hi-pdc),28(l lo,nlr hi-mono??),29(l hi-plasma),31(l
+lo-progenitor),32(l lo-b/mono)
+
+```{r proportion with TCRs}
+as.data.frame(table(cella@cell_tbl$cluster_fine)/table(dat$cluster_fine)) %>%
+  ggplot(aes(Var1,Freq,fill=Var1))+geom_col()
+```
+
+hm, half of GDT have TCR ab sequences
+
+```{r posttreatment}
+h1 <- (dat$timepoint %in% c('3','5','h'))&((dat$patient!='20')|(dat$timepoint!='5'))&(dat$cluster_coarse!='T Cells')
+table(dat$cluster_fine[h1],
+      interaction(dat$timepoint[h1],dat$patient[h1],drop=T)) %>% 
+  as.data.frame() %>% separate(Var2,c('timepoint','patient')) %>% 
+  group_by(patient,timepoint) %>% 
+  mutate(Freq=proportions(Freq)) %>% add_clinical() %>% 
+  plotBoxplot('Freq') %>% prism()+facet_wrap(~Var1,scales='free')+
+  theme(axis.text.x=element_blank())
+filter(dat,timepoint!='1',patient!='23',
+       (cluster_coarse %!in% c('Junk','Other','T Cells'))|
+         (cluster_fine=='Hematopoetic Progenitors')) %>% 
+  select(cluster_fine,clinical,patient) %>% table() %>% 
+  as.data.frame() %>% 
+  set_names(c('type','clinical','patient','freq')) %>% 
+  filter(freq>0) %>% group_split(patient,clinical) %>% 
+  map_dfr(~mutate(.x,prop=proportions(freq))) %>% 
+  plotBoxplot('prop') %>% prism()+facet_wrap(vars(type),scales='free')+
+  # ggrepel::geom_text_repel(aes(label=patient))+
+  theme(axis.text.x=element_blank())
+```
+
+```{r cell types over time}
+h1 <- (dat$timepoint %in% c('1','3','5'))&
+  (interaction(dat$patient,dat$timepoint) %!in% c('20.5','23.1'))&
+  (dat$cluster_fine %!in% c('Platelets','Platelet Mix','Junk','Erythrocytes'))
+table(dat$cluster_fine[h1],
+      interaction(dat$timepoint[h1],dat$patient[h1],drop=T)) %>% 
+  as.data.frame() %>% separate(Var2,c('timepoint','patient')) %>% 
+  rename(type=Var1) %>% 
+  group_by(patient,timepoint) %>% mutate(Freq=proportions(Freq)) %>% 
+  add_clinical() %>% mutate(timepoint=factor(if_else(
+    timepoint=='1','pre','post'),levels=c('pre','post'))) %>% 
+  group_by(clinical,timepoint,type) %>% 
+  summarize(value=mean(Freq),serr=sd(Freq)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(timepoint,value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~type,scales='free')+theme(axis.text.x=element_blank())+
+  labs(y='Proportion of cells')
+```
+
+That's actually fire really clean for increase in nlr/nr exh/cycling,
+decrease/lower MAIT CD8 CM/Th2 increase to meet in lynch decreasing
+trend for all in TEM/TEMRA, increasing treg nlr low cd8 naive, increase
+th1
+
+```{r cell types over time individuals}
+# try to find like the (5-1)/1 for each individual and stuff
+```
+
+
+
+#### TM composition
+
+```{r TM cell numbers,eval=F}
+group_by(dat,patient,timepoint) %>% summarize(n=sum(!is.na(expTil))) %>% 
+  arrange(n)
+```
+
+```{r TM pretreatment cell counts}
+h1 <- (dat$timepoint=='1')&(!is.na(dat$expTil))&
+  (interaction(dat$patient,dat$timepoint) %!in% c('20.5','8.1','8.3','8.5','23.1'))
+table(dat$cluster_fine[h1],dat$clinical[h1],dat$patient[h1]) %>% 
+  as.data.frame() %>% 
+  set_names(c('type','clinical','patient','freq')) %>% 
+  filter(freq>0) %>% group_split(patient,clinical) %>% 
+  map_dfr(~mutate(.x,prop=proportions(freq))) %>% 
+  plotBoxplot('prop') %>% prism()+facet_wrap(vars(type),scales='free')+
+  # ggrepel::geom_text_repel(aes(label=patient))+
+  theme(axis.text.x=element_blank())
+```
+
+```{r TM posttreatment cell counts}
+h1 <- (dat$timepoint %in% c('3','5',''))&(!is.na(dat$expTil))&
+  (interaction(dat$patient,dat$timepoint) %!in% c('20.5','8.1','8.3','8.5','23.1'))
+table(dat$cluster_fine[h1],
+      interaction(dat$timepoint[h1],dat$patient[h1],drop=T)) %>% 
+  as.data.frame() %>% separate(Var2,c('timepoint','patient')) %>% 
+  group_by(patient,timepoint) %>% 
+  mutate(Freq=proportions(Freq)) %>% add_clinical() %>% 
+  plotBoxplot('Freq') %>% prism()+facet_wrap(~Var1,scales='free')+
+  theme(axis.text.x=element_blank())
+```
+
+```{r TM cell types over time}
+h1 <- (dat$timepoint %in% c('1','3','5'))&(!is.na(dat$expTil))&
+  (interaction(dat$patient,dat$timepoint) %!in% c('20.5','8.1','8.3','8.5','23.1'))
+table(dat$cluster_fine[h1],
+      interaction(dat$timepoint[h1],dat$patient[h1],drop=T)) %>% 
+  as.data.frame() %>% separate(Var2,c('timepoint','patient')) %>% 
+  rename(type=Var1) %>% 
+  group_by(patient,timepoint) %>% mutate(Freq=proportions(Freq)) %>% 
+  add_clinical() %>% mutate(timepoint=factor(if_else(
+    timepoint=='1','pre','post'),levels=c('pre','post'))) %>% 
+  group_by(clinical,timepoint,type) %>% 
+  summarize(value=mean(Freq),serr=sd(Freq)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~type,scales='free')+
+  theme(axis.text.x=element_blank())
+```
+
+#### Proportion TM
+
+```{r proportion clones TM}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))&
+                  (!(names(rep4$data) %in% c('20-5','23-1')))]
+h1 <- map_dbl(h1,~mean(!is.na(.x$expTil))) %>% 
+  set_names(names(h1)) %>% data.frame('prop'=`.`) %>%
+  rownames_to_column() %>% separate(rowname,c('patient','timepoint')) %>% 
+  add_clinical()
+plotErrorbar1(group_by(h1,clinical),'prop',T,type=2)
+plotBoxplot(h1,'prop')+facet_wrap(~timepoint)
+map(c(1,3,5),function(x){
+  ggplot(h1[h1$timepoint==x,],aes(
+    reorder(patient,desc(prop)),prop,fill=clinical))+geom_col()})
+```
+
+```{r proportion TM clones temporal change}
+h1 <- pivot_wider(h1,id_cols=patient,names_from=timepoint,values_from=prop) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical()
+plotBoxplot(h1,'5-1')
+filter(h1,!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical))+geom_col()
+```
+
+Lynch has higher prop of clones TM, decreases over time
+
+```{r proportion seqs TM}
+h1 <- rep4$data[(rep4$meta$timepoint %in% c(1,3,5))&
+                  (!(names(rep4$data) %in% c('20-5','23-1')))]
+h1 <- map_dbl(h1,~sum(.x$Clones[!is.na(.x$expTil)])/sum(.x$Clones)) %>%
+  set_names(names(h1)) %>% data.frame('prop'=`.`) %>%
+  rownames_to_column() %>% separate(rowname,c('patient','timepoint')) %>% 
+  add_clinical()
+plotErrorbar1(group_by(h1,clinical),value_col='prop',T,2)+
+  theme(legend.pos='none')+
+  labs(y='Proportion of T cells',title='Proportion tumor matching')
+plotBoxplot(h1,'prop')+facet_wrap(~timepoint)
+map(c(1,3,5),function(x){
+  ggplot(h1[h1$timepoint==x,],aes(reorder(patient,desc(prop)),
+                                  prop,fill=clinical))+geom_col()})
+```
+
+```{r proportion seqs TM temporal change}
+h1 <- pivot_wider(h1,id_cols=patient,names_from=timepoint,values_from=prop) %>% 
+  mutate(`3-1`=(`3`-`1`)/`1`,`5-1`=(`5`-`1`)/`1`,`5-3`=(`5`-`3`)/`3`) %>% 
+  add_clinical()
+plotBoxplot(h1,'5-1')
+filter(h1,!is.na(`5-1`)) %>% 
+  ggplot(aes(reorder(patient,desc(`5-1`)),`5-1`,fill=clinical))+geom_col()
+```
+
+lynch highest prop TM, NLR second NLR is a lot more TM porpotion
+increase while others decrease But none of this translates to any
+pattern in change in TM clonality this could also be the result of
+sample size of pbmc and til - manual jaccard is better?
+
+could do proportion of TMs for each by cell type or proportional
+composition of TMs for clinical by cell type and then uhhh raref TMs or
+actually that's more div stuff
+
+```{r TM expcon patterns}
+with15 <- filter(rep4$meta,timepoint %in% c(1,5)) %>%
+  pivot_wider(names_from=timepoint,values_from=clinical) %>% 
+  na.omit() %>% .$patient %>% .[. %!in% c('20','23')]
+h1 <- map_dfr(with15,function(p){
+  size821 <- function(x) if_else(x>7,'8',if_else(x>1,'2','1'))
+  pre <- rep4$data[[paste0(p,'-1')]] %>% filter(!is.na(expTil)) %>% 
+    mutate(size_pre=size821(Clones)) %>% 
+    select(CDR3.aa,pre=Clones,size_pre,expTil)
+  post <- rep4$data[[paste0(p,'-5')]] %>% filter(!is.na(expTil)) %>% 
+    mutate(size_post=size821(Clones)) %>% 
+    select(CDR3.aa,post=Clones,size_post,expTil)
+  full_join(pre,post,by='CDR3.aa') %>% 
+    rowwise() %>% mutate(expTil=max(expTil.x,expTil.y,na.rm=T)) %>% 
+    ungroup() %>% select(-expTil.x,-expTil.y) %>% 
+    mutate(across(.fns=replace_na,replace=0)) %>% 
+    mutate(size_til=size821(expTil),patient=p,expcon2=(post-pre)/pre,
+           expcon=interaction(size_pre,size_post) %>% 
+             factor(levels=c('8.8','2.2','1.1','8.0','0.8','2.0','0.2',
+                             '1.0','0.1','8.1','1.8','2.1','1.2','8.2','2.8')))
+})
+
+table(h1$expcon,h1$patient) %>% as.data.frame.matrix() %>% 
+  mutate(across(.fns=proportions)) %>% t() %>% as.data.frame() %>% 
+  rownames_to_column('patient') %>% pivot_longer(-patient,names_to='expcon') %>% 
+  add_clinical() %>% ggplot(aes(expcon,value,fill=clinical))+
+  geom_boxplot()
+table(h1$expcon,h1$patient) %>% as.data.frame.matrix() %>% 
+  mutate(across(.fns=proportions)) %>% t() %>% as.data.frame() %>% 
+  rownames_to_column('patient') %>% 
+  rowwise() %>% transmute(con=sum(`8.0`,`8.1`,`8.2`),stable=`8.8`,
+                          exp=sum(`0.8`,`1.8`,`2.8`),patient=patient) %>% 
+  pivot_longer(-patient,names_to='expcon') %>% add_clinical() %>% 
+  # plotBoxplot('value')+facet_wrap(~expcon)
+  group_by(clinical,expcon) %>% 
+  summarise(serr=sd(value)/sqrt(n()),value=mean(value)) %>% 
+  ggplot(aes(expcon,value,fill=clinical,color=clinical)) %>% prism()+
+  geom_col(width=0.75,lwd=1,position=position_dodge(width=0.75))+
+  geom_errorbar(aes(ymax=serr+value,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.75))
+```
+
+```{r proportion TM by cell type,message=F}
+# fine clusters
+group_by(dat,patient,timepoint,cluster_fine) %>% 
+  summarize(prop=mean(!is.na(expTil))) %>% add_clinical() %>% ungroup() %>% 
+  group_by(clinical,cluster_fine) %>% 
+  summarize(value=mean(prop),serr=sd(prop)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% 
+  prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~cluster_fine,scales='free')+
+  theme(axis.text.x=element_blank())+ylab('Proportion tumor matching')
+# coarse
+group_by(dat,patient,timepoint,cluster_coarse) %>% 
+  summarize(prop=mean(!is.na(expTil))) %>% add_clinical() %>% ungroup() %>% 
+  group_by(clinical,cluster_coarse) %>% 
+  summarize(value=mean(prop),serr=sd(prop)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(clinical,value,fill=clinical,color=clinical)) %>% 
+  prism()+geom_col()+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1)+
+  facet_wrap(~cluster_coarse,scales='free')+
+  theme(axis.text.x=element_blank())+ylab('Proportion tumor matching')
+```
+
+```{r proportion TM by cell time by timepoint,message=F}
+# coarse
+group_by(dat,patient,timepoint,cluster_coarse) %>% 
+  summarize(prop=mean(!is.na(expTil))) %>% add_clinical() %>% ungroup() %>% 
+  group_by(clinical,timepoint,cluster_coarse) %>% 
+  summarize(value=mean(prop),serr=sd(prop)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~cluster_coarse,scales='free')+
+  theme(axis.text.x=element_blank())
+# fine
+group_by(dat,patient,timepoint,cluster_fine) %>% 
+  summarize(prop=mean(!is.na(expTil))) %>% add_clinical() %>% ungroup() %>% 
+  group_by(clinical,timepoint,cluster_fine) %>% 
+  summarize(value=mean(prop),serr=sd(prop)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~cluster_fine,scales='free')+
+  theme(axis.text.x=element_blank())
+# pre vs post
+mutate(dat,timepoint=if_else(timepoint=='1','pre','post') %>%
+         factor(levels=c('pre','post'))) %>% 
+  group_by(patient,timepoint,cluster_fine) %>% 
+  summarize(prop=mean(!is.na(expTil))) %>% add_clinical() %>% ungroup() %>% 
+  group_by(clinical,timepoint,cluster_fine) %>% 
+  summarize(value=mean(prop),serr=sd(prop)/sqrt(n())) %>% 
+  filter(clinical!='Healthy') %>% 
+  ggplot(aes(timepoint,value,fill=clinical,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),lwd=1)+
+  geom_errorbar(aes(ymax=value+serr,ymin=value-serr),width=0.2,lwd=1,
+                position=position_dodge(width=0.15))+
+  theme_prism()+scale_color_manual(values=cols_clinical)+
+  facet_wrap(~cluster_fine,scales='free')+
+  theme(axis.text.x=element_blank())
+```
+
+#### CD8 stuff
+
+```{r proportions of t cells}
+filter(dat,cluster_coarse!='Junk') %>% select(cluster_coarse,clinical) %>% 
+  table() %>% as.data.frame.matrix() %>% rownames_to_column('cluster_coarse') %>% 
+  mutate(across(-cluster_coarse,.fns=proportions)) %>% 
+  filter(cluster_coarse=='CD8 Activated') %>% 
+  pivot_longer(-cluster_coarse) %>% 
+  ggplot(aes(reorder(name,value),value,fill=name))+geom_col()+theme_void()
+```
+
+```{r proportion of t cells split by fine type}
+h1 <- filter(dat,cluster_coarse!='Junk') %>% 
+  group_by(patient,timepoint) %>% 
+  summarize(`CD8 TEMRA`=mean(cluster_fine=='CD8 TEMRA'),
+            `CD8 Effector Memory`=mean(cluster_fine=='CD8 Effector Memory')) %>% 
+  add_clinical() %>% filter(interaction(patient,timepoint) %!in% c('20.5','23.1'))
+pivot_longer(h1,c(`CD8 TEMRA`,`CD8 Effector Memory`)) %>% 
+  filter(name=='CD8 TEMRA') %>% group_by(clinical) %>% 
+  plotErrorbar1('value',plot=T,type=2)+
+  labs(title='CD8 TEMRA',y='Proportion of T cells')
+pivot_longer(h1,c(`CD8 TEMRA`,`CD8 Effector Memory`)) %>% 
+  filter(name=='CD8 Effector Memory') %>% group_by(clinical) %>% 
+  plotErrorbar1('value',plot=T,type=2)+
+  labs(title='CD8 Effector Memory',y='Proportion of T cells')
+mutate(h1,value=`CD8 TEMRA`+`CD8 Effector Memory`) %>% 
+  group_by(clinical) %>% plotErrorbar1('value',plot=T,type=2)+
+  labs(title='CD8 Activated',y='Proportion of T cells')
+```
+
+```{r proportions of overall}
+h2 <- readRDS('data_sc/meta_ldat.rds') %>% 
+  mutate(temp=paste0(patient,'-',timepoint)) %>% 
+  .$temp %>% table()
+h1 <- table(paste0(dat$patient,'-',dat$timepoint),dat$cluster_fine) %>% 
+  as.data.frame() %>% mutate(patient=str_extract(Var1,'^.*(?=-)')) %>% 
+  rename(type=Var2) %>% add_clinical() %>% filter(Var1 %!in% c('20-5','23-1')) %>% 
+  rowwise() %>% mutate(value=Freq/h2[Var1])
+
+filter(h1,type %in% c('CD8 TEMRA','CD8 Effector Memory')) %>% 
+    group_by(Var1,clinical,patient) %>% summarize(value=sum(value)) %>% 
+  group_by(clinical) %>% plotErrorbar1('value',plot=T,type=2)+
+  labs(y='Proportions',title='CD8 Activated')
+filter(h1,type=='CD8 TEMRA') %>% group_by(clinical) %>% 
+  plotErrorbar1('value',plot=T,type=2)+
+  labs(y='Proportions',title='CD8 TEMRA')
+filter(h1,type=='CD8 Effector Memory') %>% group_by(clinical) %>% 
+  plotErrorbar1('value',plot=T,type=2)+
+  labs(y='Proportions',title='CD8 Effector Memory')
+```
+
+```{r proportions of t cells split by patient}
+group_split(dat,patient,timepoint) %>% 
+  map(~table(.x$cluster_coarse) %>% as.data.frame() %>% 
+        set_names('type',paste0(.x$patient[1],'-',.x$timepoint[1]))) %>% 
+  reduce(left_join,by='type') %>% 
+  mutate(across(-type,~proportions(replace_na(.x,0)))) %>% 
+  pivot_longer(-type,values_to='prop') %>% 
+  separate(name,c('patient','timepoint')) %>% 
+  filter(!(interaction(patient,timepoint) %in% c('20.5','23.1')),
+         type=='CD8 Activated') %>% 
+  add_clinical() %>% plotBoxplot('prop')+ggrepel::geom_text_repel(aes(label=interaction(patient,timepoint)),max.overlaps=100)
+```
+
+```{r cd4-cd8 stuff}
+h1 <- group_by(dat,patient,timepoint,clinical) %>% 
+  summarize(cd8=mean(str_starts(cluster_coarse,'CD8')),
+            cd4=mean(str_starts(cluster_coarse,'CD8',negate=T)))
+ggplot(h1,aes(clinical,cd8,fill=clinical))+
+  geom_boxplot(outlier.alpha=0)+
+  geom_jitter(aes(shape=timepoint),width=0.05,height=0)
+ggplot(h1,aes(clinical,cd8/cd4,fill=clinical))+
+  geom_boxplot(outlier.alpha=0)+
+  geom_jitter(aes(shape=timepoint),width=0.05,height=0)+
+  scale_y_log10()
+ggplot(filter(h1,timepoint!=''),aes(timepoint,cd8/cd4,fill=timepoint))+
+  geom_boxplot(outlier.alpha=0)+
+  geom_jitter(width=0.05,height=0)+
+  scale_y_log10()
+pivot_wider(filter(h1,timepoint!=''),id_cols=patient,names_from=timepoint,values_from=cd8) %>% 
+  transmute(patient=patient,change=`5`-`1`) %>% na.omit() %>% add_clinical() %>% 
+  ggplot(aes(reorder(patient,desc(change)),change,fill=clinical))+geom_col()
+```
+no real overall trends 
+
+9##### clonality
+```{r overall clonality pretreatment}
+rep4$data %>% 
+  repDiversity(.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% 
+  add_clinical() %>% mutate(clinical=factor(clinical,c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))) %>% 
+  filter(timepoint %in% c(1,'h')) %>%
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical))+
+  geom_boxplot(lwd=1.5)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=30,hjust=1,vjust=1))+
+  theme_prism(axis_text_angle=45,base_size=12)+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)+
+  ylab('Inverse simpson index')
+```
+
+```{r overall clonality posttreatment}
+rep4$data %>% 
+  # map(~filter(.x,cluster_fine=='CD8 TEMRA')) %>%
+  repDiversity(.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% 
+  add_clinical() %>% mutate(clinical=factor(clinical,c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))) %>% 
+  filter(timepoint %in% c('3','5','h')) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical))+
+  geom_boxplot(lwd=1.5)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=30,hjust=1,vjust=1))+
+  theme_prism(axis_text_angle=45,base_size=12)+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)+
+  ylab('Inverse simpson index')
+# checking that isn't just seq number question
+h1 <- repDiversity(rep4$data,.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% add_clinical()
+h1$seqs <- map_dbl(rep4$data,~sum(.x$Clones))
+filter(h1,clinical=='Healthy') %>% ggplot(aes(seqs,Value))+geom_point(aes(color=clinical,pch=timepoint))+geom_smooth(method='lm')+scale_y_log10()+scale_x_log10()
+filter(h1,timepoint %in% c('1')) %>% ggplot(aes(seqs,Value))+geom_point(aes(color=clinical,pch=timepoint))+geom_smooth(method='lm')+scale_y_log10()+scale_x_log10()
+filter(h1,timepoint %in% c('3','5')) %>% ggplot(aes(seqs,Value))+geom_point(aes(color=clinical,pch=timepoint))+geom_smooth(method='lm')+scale_y_log10()+scale_x_log10()
+filter(h1,timepoint %in% c('0','7')) %>% ggplot(aes(seqs,Value))+geom_point(aes(color=clinical,pch=timepoint))+geom_smooth(method='lm')+scale_y_log10()+scale_x_log10()
+```
+
+```{r temra specific}
+rep4$data[(rep4$meta$timepoint %in% c(1,3,5))&
+            (!names(rep4$data) %in% c('20-5','23-1'))] %>% 
+  map(~filter(.x,cluster_fine=='CD8 TEMRA')) %>%
+  repDiversity(.method='inv.simp') %>%
+  mutate(patient=str_extract(Sample,'.*(?=-)'),
+         timepoint=str_extract(Sample,'.$')) %>% 
+  add_clinical() %>% mutate(clinical=factor(clinical,c('Lynch-like responder','Nonlynch-like responder','Nonresponder','Healthy'))) %>% 
+  ggplot(aes(clinical,Value,fill=clinical,color=clinical))+
+  geom_boxplot(lwd=1.5)+scale_y_log10()+
+  theme(axis.text.x=element_text(angle=30,hjust=1,vjust=1))+
+  theme_prism(axis_text_angle=45,base_size=12)+
+  scale_fill_manual(values=cols_clinical)+
+  scale_color_manual(values=cols_clinical_dark)+
+  ylab('Inverse simpson index')+facet_wrap(~timepoint)
+```
+
+### Misc
+```{r tmb corr}
+cl <- readRDS('data_misc/clinical.rds')
+# this doesn't match the tmb data from the figures
+```
+
