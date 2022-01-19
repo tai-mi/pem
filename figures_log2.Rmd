@@ -101,6 +101,35 @@ filter(h1,timepoint %in% c('1','3','5')) %>%
   theme(legend.pos='none')
 ```
 
+```{r hill numbers}
+h2 <- rep4$data[!(names(rep4$data) %in% c('20-5','23-1','21-1'))] #%>% repSample() # can downsample, remove 21-1 optional
+
+# hill 1-10
+# repDiversity(h2,'hill',.max.q=10,.min.q=1) %>% 
+#   separate(Sample,c('patient','timepoint')) %>% add_clinical()
+# hill 1,2,4,10,50
+h2 <- rbind(repDiversity(h2,'hill',.max.q=2,.min.q=1),
+            repDiversity(h2,'hill',.max.q=4,.min.q=4),
+            repDiversity(h2,'hill',.max.q=10,.min.q=10),
+            repDiversity(h2,'hill',.max.q=50,.min.q=50)) %>% 
+  separate(Sample,c('patient','timepoint')) %>% add_clinical()
+
+filter(h2,timepoint %in% c('1','h')) %>% #set timepoints
+  group_by(clinical,Q) %>%
+  summarise(serr=sd(Value)/sqrt(n()),Value=mean(Value)) %>%
+  ungroup() %>%
+  ggplot(aes(as.factor(Q),Value,color=clinical))+
+  geom_point(size=2.5,position=position_dodge(width=0.15))+
+  geom_line(aes(group=clinical),position=position_dodge(width=0.15),
+            lwd=1)+
+  geom_errorbar(aes(ymin=Value-serr,ymax=Value+serr),
+                position=position_dodge(width=0.15),
+                width=0.1,lwd=1)+
+  theme_prism()+scale_color_manual(values=cols_clinical)
+# 1 should be shannon, 2 is inv.simp
+```
+
+
 ```{r TIL}
 filter(h1,timepoint=='0') %>% plotBoxplot() %>% prism()+scale_y_log10()
 ```
@@ -783,7 +812,7 @@ h1 <- map_dbl(rep4$data[(rep4$meta$timepoint %in% c('1','3','5'))&
 
 ```{r vj gene diversity seqs}
 # with counting clonotype size
-limitSize <- 500
+limitSize <- 500 #min clones to use?
 h2 <- 'vj' #v.j, j, or v gene diversity
 h3 <- c('1','h') #timepoint filter
 h1 <- filter(cella@contig_tbl,(!is.na(v_gene))&(!is.na(j_gene)),
@@ -1701,3 +1730,4 @@ cl <- readRDS('data_misc/clinical.rds')
 # this doesn't match the tmb data from the figures
 ```
 
+holy shit this is long
